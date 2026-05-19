@@ -48,7 +48,7 @@ export function ClosePositionForm({ symbol, qty, error }: Props) {
               step="any"
               required
               placeholder="0"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 font-mono text-right focus:border-orange-400/60 focus:outline-none"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 font-mono text-base text-right focus:border-orange-400/60 focus:outline-none"
             />
           </div>
         )}

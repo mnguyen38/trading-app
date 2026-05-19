@@ -8,6 +8,20 @@ html, body {
   background: #0a0a0a;
   color: #ededed;
   -webkit-tap-highlight-color: transparent;
+  /* Prevent rubber-band bounce in PWA fullscreen */
+  overscroll-behavior: none;
+  /* Disable iOS long-press context menu on links/images */
+  -webkit-touch-callout: none;
+}
+
+/* Remove +/− steppers from number inputs — they look bad on iOS */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 @theme {
@@ -16,4 +30,18 @@ html, body {
   --color-border: #262626;
   --color-up: #16a34a;
   --color-down: #dc2626;
+}
+
+/* Safe area utilities for PWA fullscreen mode (Dynamic Island, home indicator) */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reserve space at bottom of page content for the mobile tab bar + home indicator */
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

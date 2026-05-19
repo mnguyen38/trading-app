@@ -102,7 +102,7 @@ export function TradeForm({ symbol, price, buyingPower, error }: Props) {
             step="any"
             required
             placeholder="0"
-            className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pr-4 font-mono text-right focus:border-orange-400/60 focus:outline-none ${
+            className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pr-4 font-mono text-base text-right focus:border-orange-400/60 focus:outline-none ${
               qtyMode === "notional" ? "pl-8" : "pl-4"
             }`}
           />
@@ -123,7 +123,7 @@ export function TradeForm({ symbol, price, buyingPower, error }: Props) {
               step="0.01"
               defaultValue={price ?? undefined}
               required
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pl-8 pr-4 font-mono focus:border-orange-400/60 focus:outline-none"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pl-8 pr-4 font-mono text-base focus:border-orange-400/60 focus:outline-none"
             />
           </div>
         </div>
@@ -142,7 +142,7 @@ export function TradeForm({ symbol, price, buyingPower, error }: Props) {
               min="0.01"
               step="0.01"
               required
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pl-8 pr-4 font-mono focus:border-orange-400/60 focus:outline-none"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 pl-8 pr-4 font-mono text-base focus:border-orange-400/60 focus:outline-none"
             />
           </div>
         </div>

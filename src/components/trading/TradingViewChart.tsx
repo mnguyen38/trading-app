@@ -8,6 +8,10 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
     if (!ref.current) return;
     ref.current.innerHTML = "";
 
+    // Read the actual rendered height so the widget config matches the CSS container.
+    // On mobile this is ~30dvh; on desktop it's the fixed 460px.
+    const containerHeight = ref.current.clientHeight;
+
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
     widget.style.height = "100%";
@@ -19,7 +23,7 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
     script.async = true;
     script.textContent = JSON.stringify({
       width: "100%",
-      height: 550,
+      height: containerHeight,
       symbol,
       interval: "D",
       timezone: "America/New_York",
@@ -41,7 +45,9 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
   return (
     <div
       ref={ref}
-      className="tradingview-widget-container h-[500px] w-full overflow-hidden rounded-xl border border-neutral-800"
+      // Mobile: 30% of dynamic viewport height — fits all phone screen sizes.
+      // Desktop: fixed 460px.
+      className="tradingview-widget-container h-[30dvh] w-full overflow-hidden rounded-xl border border-neutral-800 md:h-[460px]"
     />
   );
 }

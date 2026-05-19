@@ -55,7 +55,7 @@ export default async function LoginPage({
   const selectedTrader = allTraders.find(t => t.id === selectedId);
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-5">
+    <main className="safe-top safe-bottom flex min-h-dvh items-center justify-center px-5">
       <div className="w-full max-w-xs">
         <h1 className="mb-1 text-3xl font-bold">Trading Lab</h1>
 
