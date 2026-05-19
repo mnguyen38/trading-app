@@ -1,0 +1,45 @@
+---
+title: "Set a Limit Order"
+description: "Name your price and wait for the market to come to you"
+tier: 1
+order: 5
+estimatedMinutes: 5
+completionAction: "limit-order"
+requiresMarketOpen: true
+actionHref: "/trade"
+actionLabel: "Go to Trade"
+missionText: "Pick a stock and place a limit buy — set your limit price slightly below the current market price. You're telling the market: I'll buy, but only at my price. This lesson completes when your limit order is placed."
+---
+
+## Why not just use market orders?
+
+Market orders are fast, but you don't control the price. With a volatile stock, your fill might be worse than you expected. A limit order solves this — it only executes at your price or better.
+
+## How limit orders work
+
+When you place a limit buy, you set a **maximum price** you're willing to pay. The order sits open and waits. If the stock price drops to your limit price (or below), it fills. If it never gets there, the order expires at the end of the day (or stays open if you set it to GTC).
+
+**Example:** AAPL is trading at $200. You set a limit buy at $197. The order waits. If AAPL dips to $197 during the trading day, your order fills. If it stays above $197, nothing happens.
+
+## Limit price strategy
+
+Where should you set your limit? A few approaches:
+
+- **Just below market** — e.g., $198.50 when the stock is at $200. You might fill in minutes on a dip, or miss by a few cents.
+- **At a support level** — a price the stock has bounced off before. More intentional, but might wait days or weeks.
+- **At a round number** — many orders cluster at $200, $250, etc. Slightly below ($199.50) can get you filled ahead of the crowd.
+
+## Time in force
+
+Two options after you switch to Limit:
+
+- **Day** — the order cancels at 4pm if it doesn't fill. You start fresh tomorrow.
+- **GTC (Good Till Cancelled)** — stays open until it fills or you manually cancel. Use this when you're targeting a specific price and willing to wait.
+
+## What to do now
+
+Go to the trade page. Select **Limit** as the order type. Set a limit price a dollar or two below the current price — not so far that it'll never fill, but enough to be intentional about your entry. Place the order.
+
+Even if it doesn't fill today, you'll see it in your Open Orders on the dashboard. That's part of the lesson — limit orders teach patience.
+
+> This lesson requires the market to be open (9:30am–4:00pm ET, Monday–Friday) to mark complete.
