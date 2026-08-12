@@ -3,9 +3,10 @@ import { getTraderById } from "@/src/lib/traders";
 import { strategiesForType, cashBufferPct, bufferConfig } from "@/src/lib/strategies";
 import { alpacaForTrader } from "@/src/lib/alpaca";
 import { db } from "@/src/db/client";
-import { strategyTrades } from "@/src/db/schema";
-import { eq } from "drizzle-orm";
+import { strategyTrades, engineRuns } from "@/src/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { StrategyCard } from "@/src/components/strategies/StrategyCard";
+import { EngineLog, type EngineRunRow } from "@/src/components/strategies/EngineLog";
 import { money } from "@/src/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +23,14 @@ export default async function StrategiesPage() {
   const account = await alpaca.getAccount();
   const equity = parseFloat(account.equity);
 
-  // Fetch strategy tags to compute active P&L per strategy (by symbol match)
-  const tags = await db
-    .select()
-    .from(strategyTrades)
-    .where(eq(strategyTrades.traderId, traderId));
+  // Fetch strategy tags + recent engine runs in parallel
+  const [tags, recentRuns] = await Promise.all([
+    db.select().from(strategyTrades).where(eq(strategyTrades.traderId, traderId)),
+    db.select().from(engineRuns)
+      .where(eq(engineRuns.traderId, traderId))
+      .orderBy(desc(engineRuns.runAt))
+      .limit(100) as Promise<EngineRunRow[]>,
+  ]);
 
   // Group tagged symbols by strategy slug
   const symbolsBySlug = new Map<string, Set<string>>();
@@ -143,6 +147,7 @@ export default async function StrategiesPage() {
         ))}
       </div>
 
+      <EngineLog runs={recentRuns} />
     </main>
   );
 }

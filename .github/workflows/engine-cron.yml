@@ -1,0 +1,89 @@
+name: Trading Engine
+
+on:
+  schedule:
+    # Micro — scan every 5 min during market hours (13:30–20:00 UTC = 9:30AM–4PM ET)
+    - cron: '*/5 13-20 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: 'entry or exit'
+        default: 'entry'
+      trader_type:
+        description: 'micro or macro'
+        default: 'micro'
+
+jobs:
+  micro-entry:
+    name: Micro entry scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Trigger engine
+        run: |
+          curl -sf -X GET \
+            "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=micro" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            | jq '{signals, trades, errors}'
+
+  micro-exit:
+    name: Micro exit scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Trigger engine
+        run: |
+          curl -sf -X GET \
+            "${{ secrets.APP_URL }}/api/engine/run?phase=exit&trader_type=micro" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            | jq '{exits, errors}'
+
+  macro-entry:
+    name: Macro entry scan
+    runs-on: ubuntu-latest
+    # Macro only runs once — at market open (first 5-min window, ~13:30 UTC)
+    if: github.event_name == 'schedule' && (github.event.schedule == '*/5 13-20 * * 1-5') && startsWith(github.run_number, '1') == false
+    steps:
+      - name: Trigger engine (entry, first run only)
+        run: |
+          MINUTE=$(date -u +%M)
+          HOUR=$(date -u +%H)
+          # Only fire macro entry once at 13:35 UTC (9:35 AM ET)
+          if [ "$HOUR" = "13" ] && [ "$MINUTE" -ge "35" ] && [ "$MINUTE" -lt "40" ]; then
+            curl -sf -X GET \
+              "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=macro" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              | jq '{signals, trades, errors}'
+          else
+            echo "Not macro entry window, skipping"
+          fi
+
+  macro-exit:
+    name: Macro exit scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Trigger macro exit every 30 min
+        run: |
+          MINUTE=$(date -u +%M)
+          # Fire at :00 and :30 past each hour
+          if [ "$MINUTE" -lt "5" ] || ([ "$MINUTE" -ge "30" ] && [ "$MINUTE" -lt "35" ]); then
+            curl -sf -X GET \
+              "${{ secrets.APP_URL }}/api/engine/run?phase=exit&trader_type=macro" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              | jq '{exits, errors}'
+          else
+            echo "Not macro exit window, skipping"
+          fi
+
+  manual:
+    name: Manual trigger
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Trigger engine
+        run: |
+          curl -sf -X GET \
+            "${{ secrets.APP_URL }}/api/engine/run?phase=${{ inputs.phase }}&trader_type=${{ inputs.trader_type }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            | jq '.'

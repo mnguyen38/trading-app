@@ -6,23 +6,7 @@
     },
     {
       "path": "/api/notify",
-      "schedule": "*/2 13-21 * * 1-5"
-    },
-    {
-      "path": "/api/engine/run?phase=entry&trader_type=micro",
-      "schedule": "*/5 13-21 * * 1-5"
-    },
-    {
-      "path": "/api/engine/run?phase=exit&trader_type=micro",
-      "schedule": "*/5 13-21 * * 1-5"
-    },
-    {
-      "path": "/api/engine/run?phase=entry&trader_type=macro",
-      "schedule": "35 14 * * 1-5"
-    },
-    {
-      "path": "/api/engine/run?phase=exit&trader_type=macro",
-      "schedule": "*/30 14-21 * * 1-5"
+      "schedule": "0 14 * * 1-5"
     }
   ]
 }
