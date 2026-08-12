@@ -133,7 +133,7 @@ export class AlpacaError extends Error {
   }
 }
 
-class AlpacaClient {
+export class AlpacaClient {
   constructor(private key: string, private secret: string) {}
 
   private headers(): Record<string, string> {

@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
         for (const row of subs) {
           try {
-            await webpush.sendNotification(row.subscription as PushSubscriptionJSON, payload);
+            await webpush().sendNotification(row.subscription as PushSubscriptionJSON, payload);
           } catch {
             // Stale subscription — remove it
             await db

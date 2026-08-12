@@ -124,7 +124,7 @@ async function pushToTrader(traderId: string, title: string, body: string) {
 
   for (const row of subs) {
     try {
-      await webpush.sendNotification(row.subscription as PushSubscriptionJSON, payload);
+      await webpush().sendNotification(row.subscription as PushSubscriptionJSON, payload);
     } catch {
       await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, row.id));
     }

@@ -1,12 +1,20 @@
 import webpush from "web-push";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-);
+let initialised = false;
 
-export { webpush };
+function getWebpush() {
+  if (!initialised) {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT!,
+      process.env.VAPID_PUBLIC_KEY!,
+      process.env.VAPID_PRIVATE_KEY!,
+    );
+    initialised = true;
+  }
+  return webpush;
+}
+
+export { getWebpush as webpush };
 
 export type PushSubscriptionJSON = {
   endpoint: string;
