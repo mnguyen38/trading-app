@@ -7,12 +7,14 @@ export type Trader = {
   id: string;
   name: string;
   accountKey: string;
+  type: "micro" | "macro";
 };
 
 const cols = {
   id: traders.id,
   name: traders.name,
   accountKey: traders.accountKey,
+  type: traders.type,
 };
 
 export async function getAllTraders(): Promise<Trader[]> {
@@ -30,5 +32,5 @@ export async function verifyTraderPasscode(id: string, passcode: string): Promis
   if (!rows[0]) return undefined;
   const valid = await bcrypt.compare(passcode, rows[0].passcodeHash);
   if (!valid) return undefined;
-  return { id: rows[0].id, name: rows[0].name, accountKey: rows[0].accountKey };
+  return { id: rows[0].id, name: rows[0].name, accountKey: rows[0].accountKey, type: rows[0].type };
 }

@@ -28,6 +28,7 @@ export type Position = {
   unrealized_plpc: string;
   current_price: string;
   side: "long" | "short";
+  asset_class?: string;
 };
 
 export type OrderStatus =
@@ -80,6 +81,45 @@ export type Clock = {
 };
 
 export type Bar = { t: string; o: number; h: number; l: number; c: number; v: number };
+
+// ----- Options types -----
+
+export type OptionContract = {
+  id: string;
+  symbol: string;             // e.g. "AAPL250117C00150000"
+  underlying_symbol: string;  // e.g. "AAPL"
+  type: "call" | "put";
+  expiration_date: string;    // "2025-01-17"
+  strike_price: string;       // "150.00"
+  open_interest: string | null;
+  close_price: string | null;
+};
+
+export type PlaceOptionOrderInput = {
+  symbol: string;       // full contract symbol e.g. "AAPL250117C00150000"
+  side: "buy" | "sell";
+  type: "market" | "limit";
+  time_in_force: "day" | "gtc";
+  qty: string;          // number of contracts (each = 100 shares)
+  limit_price?: string;
+};
+
+// Parsed representation of an OCC option symbol
+export type ParsedOptionSymbol = {
+  underlying: string;
+  expiry: string;       // "2025-01-17"
+  contractType: "call" | "put";
+  strike: number;
+};
+
+export function parseOptionSymbol(symbol: string): ParsedOptionSymbol | null {
+  const match = symbol.match(/^([A-Z]+)(\d{6})([CP])(\d{8})$/);
+  if (!match) return null;
+  const [, underlying, dateStr, typeChar, strikeStr] = match;
+  const expiry = `20${dateStr.slice(0, 2)}-${dateStr.slice(2, 4)}-${dateStr.slice(4, 6)}`;
+  const strike = parseInt(strikeStr, 10) / 1000;
+  return { underlying, expiry, contractType: typeChar === "C" ? "call" : "put", strike };
+}
 
 // ----- Client -----
 
@@ -138,6 +178,43 @@ class AlpacaClient {
   }
   getPosition(symbol: string) { return this.req<Position>(BASE, "GET", `/positions/${encodeURIComponent(symbol)}`); }
   getClock() { return this.req<Clock>(BASE, "GET", "/clock"); }
+
+  // Options endpoints
+  getOptionsContracts(
+    underlying: string,
+    opts: {
+      type?: "call" | "put";
+      expiration_date_gte?: string;
+      expiration_date_lte?: string;
+      strike_price_gte?: string;
+      strike_price_lte?: string;
+      limit?: number;
+    } = {},
+  ) {
+    const params = new URLSearchParams({ underlying_symbols: underlying });
+    if (opts.type) params.set("type", opts.type);
+    if (opts.expiration_date_gte) params.set("expiration_date_gte", opts.expiration_date_gte);
+    if (opts.expiration_date_lte) params.set("expiration_date_lte", opts.expiration_date_lte);
+    if (opts.strike_price_gte) params.set("strike_price_gte", opts.strike_price_gte);
+    if (opts.strike_price_lte) params.set("strike_price_lte", opts.strike_price_lte);
+    params.set("limit", String(opts.limit ?? 100));
+    return this.req<{ option_contracts: OptionContract[]; next_page_token: string | null }>(
+      BASE, "GET", `/options/contracts?${params}`,
+    );
+  }
+
+  placeOptionOrder(input: PlaceOptionOrderInput) {
+    return this.req<Order>(BASE, "POST", "/orders", {
+      symbol: input.symbol,
+      side: input.side,
+      type: input.type,
+      time_in_force: input.time_in_force,
+      qty: input.qty,
+      ...(input.limit_price ? { limit_price: input.limit_price } : {}),
+      asset_class: "us_option",
+      order_class: "simple",
+    });
+  }
 
   // Market data (same auth, different host; IEX feed is free)
   getLatestQuote(symbol: string) {

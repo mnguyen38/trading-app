@@ -8,6 +8,27 @@
       "when": 1778937039572,
       "tag": "0000_military_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779188192855,
+      "tag": "0001_dusty_black_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786523600076,
+      "tag": "0002_past_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0003_engine_tables",
+      "breakpoints": true
     }
   ]
 }

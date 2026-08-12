@@ -5,15 +5,22 @@ import { usePriceStream } from "@/src/hooks/usePriceStream";
 import { PortfolioPie } from "./PortfolioPie";
 import { money, signed, pct, num } from "@/src/lib/format";
 import type { Position, Order } from "@/src/lib/alpaca";
+import { getStrategy } from "@/src/lib/strategies";
+
+type StrategyTradeRow = {
+  strategySlug: string;
+  symbol: string;
+};
 
 type Props = {
   traderName: string;
   accountNumber: string;
   accountStatus: string;
   initialData: LiveData;
+  strategyTrades?: StrategyTradeRow[];
 };
 
-export function LiveDashboard({ traderName, accountNumber, accountStatus, initialData }: Props) {
+export function LiveDashboard({ traderName, accountNumber, accountStatus, initialData, strategyTrades = [] }: Props) {
   const { account, positions, openOrders, stale } = useLiveAccount(initialData);
 
   const symbols = positions.map(p => p.symbol);
@@ -75,6 +82,11 @@ export function LiveDashboard({ traderName, accountNumber, accountStatus, initia
 
       <PositionsSection positions={positions} streamPrices={streamPrices} />
       <OpenOrdersSection orders={openOrders} />
+      <StrategyPerformanceSection
+        strategyTrades={strategyTrades}
+        positions={positions}
+        streamPrices={streamPrices}
+      />
 
       <footer className="mt-10 text-center text-xs text-neutral-600">
         Account {accountNumber} · {accountStatus}
@@ -171,6 +183,86 @@ function OpenOrdersSection({ orders }: { orders: Order[] }) {
             <div className="text-right text-xs text-neutral-400">{o.status}</div>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function StrategyPerformanceSection({
+  strategyTrades,
+  positions,
+  streamPrices,
+}: {
+  strategyTrades: StrategyTradeRow[];
+  positions: Position[];
+  streamPrices: Record<string, number>;
+}) {
+  if (strategyTrades.length === 0) return null;
+
+  // Build symbol → P&L map from live positions
+  const plBySymbol = new Map<string, number>();
+  for (const p of positions) {
+    const live = streamPrices[p.symbol];
+    const qty = parseFloat(p.qty);
+    const avg = parseFloat(p.avg_entry_price);
+    const pl = live !== undefined
+      ? (live - avg) * qty
+      : parseFloat(p.unrealized_pl);
+    plBySymbol.set(p.symbol, pl);
+  }
+
+  // Group tagged symbols by strategy, sum P&L for symbols that have open positions
+  const bySlug = new Map<string, { symbols: Set<string>; totalPl: number; hasPositions: boolean }>();
+  for (const tag of strategyTrades) {
+    if (!bySlug.has(tag.strategySlug)) {
+      bySlug.set(tag.strategySlug, { symbols: new Set(), totalPl: 0, hasPositions: false });
+    }
+    const entry = bySlug.get(tag.strategySlug)!;
+    entry.symbols.add(tag.symbol);
+    const pl = plBySymbol.get(tag.symbol);
+    if (pl !== undefined) {
+      entry.totalPl += pl;
+      entry.hasPositions = true;
+    }
+  }
+
+  // Only show strategies that have at least one tagged trade
+  const entries = [...bySlug.entries()];
+
+  return (
+    <section className="mb-6">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+          Strategy performance
+        </h2>
+        <Link href="/strategies" className="text-xs text-neutral-500 underline underline-offset-2 hover:text-neutral-300">
+          View all →
+        </Link>
+      </div>
+      <div className="divide-y divide-neutral-800 rounded-xl border border-neutral-800 bg-neutral-900">
+        {entries.map(([slug, data]) => {
+          const strategy = getStrategy(slug);
+          return (
+            <Link
+              key={slug}
+              href="/strategies"
+              className="flex items-center justify-between p-4 transition hover:bg-neutral-800/60"
+            >
+              <div>
+                <div className="text-sm font-semibold">{strategy?.name ?? slug}</div>
+                <div className="text-xs text-neutral-500">
+                  {data.symbols.size} symbol{data.symbols.size !== 1 ? "s" : ""} tagged
+                  {!data.hasPositions && " · no open positions"}
+                </div>
+              </div>
+              {data.hasPositions && (
+                <div className={`font-mono text-sm tabular-nums ${data.totalPl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  {signed(data.totalPl, n => money(n))}
+                </div>
+              )}
+            </Link>
+          );
+        })}
       </div>
     </section>
   );

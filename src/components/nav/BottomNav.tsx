@@ -33,23 +33,25 @@ const tabs = [
     ),
   },
   {
-    href: "/leaderboard",
-    label: "Board",
+    href: "/strategies",
+    label: "Plays",
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <rect x="3" y="12" width="4" height="7" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-        <rect x="9" y="8" width="4" height="11" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-        <rect x="15" y="4" width="4" height="15" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="11" cy="11" r="3" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M11 3v2M11 17v2M3 11h2M17 11h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },
   {
-    href: "/learn",
-    label: "Learn",
+    href: "/earnings",
+    label: "Earnings",
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M11 4L2 9l9 5 9-5-9-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-        <path d="M2 14l9 5 9-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <rect x="3" y="4" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M3 9h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M8 2v4M14 2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M7 13h2M10 13h2M13 13h2M7 16h2M10 16h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },

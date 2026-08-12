@@ -1,6 +1,7 @@
 import { getSession } from "@/src/lib/auth";
 import { getTraderById } from "@/src/lib/traders";
 import { logout } from "@/src/server/actions/auth";
+import { NotificationToggle } from "@/src/components/settings/NotificationToggle";
 
 export default async function SettingsPage() {
   const traderId = await getSession();
@@ -22,9 +23,9 @@ export default async function SettingsPage() {
         </div>
       </section>
 
-      {/* Future settings placeholder */}
-      <section className="mb-8 rounded-xl border border-dashed border-neutral-800 px-4 py-5 text-center text-sm text-neutral-600">
-        More settings coming soon.
+      {/* Notifications */}
+      <section className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
+        <NotificationToggle />
       </section>
 
       {/* Logout */}

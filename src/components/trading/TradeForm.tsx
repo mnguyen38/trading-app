@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { placeOrder } from "@/src/server/actions/trade";
 import { money } from "@/src/lib/format";
+import type { Strategy } from "@/src/lib/strategies";
 
 type OrderType = "market" | "limit" | "stop" | "stop_limit";
 
@@ -16,10 +17,11 @@ type Props = {
   symbol: string;
   price: number | null;
   buyingPower: number;
+  strategies?: Strategy[];
   error?: string;
 };
 
-export function TradeForm({ symbol, price, buyingPower, error }: Props) {
+export function TradeForm({ symbol, price, buyingPower, strategies = [], error }: Props) {
   const [side, setSide]           = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [qtyMode, setQtyMode]     = useState<"shares" | "notional">("shares");
@@ -166,6 +168,22 @@ export function TradeForm({ symbol, price, buyingPower, error }: Props) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Strategy tag */}
+      {strategies.length > 0 && (
+        <div>
+          <label className="mb-1.5 block text-xs text-neutral-500">Tag to strategy (optional)</label>
+          <select
+            name="strategy_slug"
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-sm focus:border-orange-400/60 focus:outline-none"
+          >
+            <option value="">— No strategy —</option>
+            {strategies.map(s => (
+              <option key={s.slug} value={s.slug}>{s.name}</option>
+            ))}
+          </select>
         </div>
       )}
 
