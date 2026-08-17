@@ -230,9 +230,20 @@ export class AlpacaClient {
       prevDailyBar?: { c: number };
     }>(DATA_BASE, "GET", `/stocks/${encodeURIComponent(symbol)}/snapshot?feed=iex`);
   }
-  getBars(symbol: string, timeframe = "1Day", limit = 30) {
+  getBars(symbol: string, timeframe = "1Day", limit = 260) {
+    // Without a start date Alpaca returns only the current session bar.
+    // 1.5× calendar days per trading day covers weekends + holidays.
+    const start = new Date();
+    start.setDate(start.getDate() - Math.ceil(limit * 1.5));
+    const params = new URLSearchParams({
+      timeframe,
+      limit: String(limit),
+      start: start.toISOString().split("T")[0],
+      feed: "iex",
+      adjustment: "split",
+    });
     return this.req<{ bars: Bar[] }>(
-      DATA_BASE, "GET", `/stocks/${encodeURIComponent(symbol)}/bars?timeframe=${timeframe}&limit=${limit}&feed=iex`
+      DATA_BASE, "GET", `/stocks/${encodeURIComponent(symbol)}/bars?${params}`,
     );
   }
 }
