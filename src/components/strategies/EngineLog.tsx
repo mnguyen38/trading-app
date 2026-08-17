@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-type Signal = { strategy: string; underlying: string; reason: string };
+type Signal = { strategy: string; underlying: string; reason: string; log?: string[] };
 type Trade  = { strategy: string; symbol: string; side: string; qty: number };
-type Skip   = { strategy: string; reason: string };
+type Skip   = { strategy: string; reason: string; log?: string[] };
 type Err    = { strategy: string; error: string };
 
 export type EngineRunRow = {
@@ -47,9 +47,10 @@ function RunCard({ run }: { run: EngineRunRow }) {
 
   const signals = run.signals ?? [];
   const trades  = run.trades  ?? [];
+  const skipped = run.skipped ?? [];
   const errors  = run.errors  ?? [];
 
-  const hasActivity = signals.length > 0 || trades.length > 0 || errors.length > 0;
+  const hasActivity = signals.length > 0 || trades.length > 0 || errors.length > 0 || skipped.length > 0;
   const isEntry = run.phase === "entry";
 
   return (
@@ -73,10 +74,13 @@ function RunCard({ run }: { run: EngineRunRow }) {
               {signals.map(s => s.underlying).join(", ")}
               <span className="ml-1.5 text-neutral-500">
                 · {signals.length} signal{signals.length !== 1 ? "s" : ""}, {trades.length} trade{trades.length !== 1 ? "s" : ""}
+                {skipped.length > 0 && `, ${skipped.length} skipped`}
               </span>
             </span>
           ) : errors.length > 0 ? (
             <span className="text-red-400">{errors.length} error{errors.length !== 1 ? "s" : ""}</span>
+          ) : skipped.length > 0 ? (
+            <span className="text-neutral-500">{skipped.length} strategies scanned — no signals</span>
           ) : (
             <span className="text-neutral-600">No signals</span>
           )}
@@ -100,20 +104,52 @@ function RunCard({ run }: { run: EngineRunRow }) {
       {expanded && hasActivity && (
         <div className="border-t border-neutral-800 px-4 pb-4 pt-3 space-y-4">
 
-          {/* Signals — the "why" */}
+          {/* Signals fired — the "why it triggered" */}
           {signals.length > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Signals fired</p>
               <div className="space-y-2">
                 {signals.map((s, i) => (
-                  <div key={i} className="rounded-lg bg-neutral-800/50 px-3 py-2">
+                  <div key={i} className="rounded-lg bg-emerald-900/10 border border-emerald-900/30 px-3 py-2">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-bold text-neutral-100">{s.underlying}</span>
                       <span className="rounded bg-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-400">
                         {strategyLabel(s.strategy)}
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-400 leading-relaxed">{s.reason}</p>
+                    <p className="text-xs text-emerald-400 leading-relaxed font-medium">{s.reason}</p>
+                    {s.log && s.log.length > 0 && (
+                      <div className="mt-2 space-y-0.5 border-t border-neutral-800 pt-2">
+                        {s.log.map((line, j) => (
+                          <p key={j} className="font-mono text-[10px] text-neutral-500 leading-relaxed">{line}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Skipped strategies — the "why it didn't trigger" */}
+          {skipped.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Why other strategies didn&apos;t fire</p>
+              <div className="space-y-2">
+                {skipped.map((s, i) => (
+                  <div key={i} className="rounded-lg bg-neutral-800/30 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-neutral-400 mb-1">{strategyLabel(s.strategy)}</p>
+                    {s.log && s.log.length > 0 ? (
+                      <div className="space-y-0.5">
+                        {s.log.map((line, j) => (
+                          <p key={j} className={`font-mono text-[10px] leading-relaxed ${line.includes("✓ SIGNAL") ? "text-emerald-400" : "text-neutral-600"}`}>
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="font-mono text-[10px] text-neutral-600">{s.reason}</p>
+                    )}
                   </div>
                 ))}
               </div>

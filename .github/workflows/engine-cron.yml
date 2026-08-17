@@ -2,7 +2,7 @@ name: Trading Engine
 
 on:
   schedule:
-    # Micro — scan every 5 min during market hours (13:30–20:00 UTC = 9:30AM–4PM ET)
+    # Every 5 min during market hours (13:30–20:05 UTC = 9:30AM–4:05PM ET)
     - cron: '*/5 13-20 * * 1-5'
   workflow_dispatch:
     inputs:
@@ -10,70 +10,89 @@ on:
         description: 'entry or exit'
         default: 'entry'
       trader_type:
-        description: 'micro or macro'
-        default: 'micro'
+        description: 'micro or macro (leave blank for both)'
+        default: ''
 
 jobs:
   micro-entry:
-    name: Micro entry scan
+    name: Micro — entry scan
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
-      - name: Trigger engine
+      - name: Trigger
         run: |
-          curl -sf -X GET \
+          echo "Calling micro entry at $(date -u)"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
             "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=micro" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            | jq '{signals, trades, errors}'
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          [ "$HTTP_CODE" -lt 400 ] || exit 1
 
   micro-exit:
-    name: Micro exit scan
+    name: Micro — exit scan
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
-      - name: Trigger engine
+      - name: Trigger
         run: |
-          curl -sf -X GET \
+          echo "Calling micro exit at $(date -u)"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
             "${{ secrets.APP_URL }}/api/engine/run?phase=exit&trader_type=micro" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            | jq '{exits, errors}'
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          [ "$HTTP_CODE" -lt 400 ] || exit 1
 
   macro-entry:
-    name: Macro entry scan
+    name: Macro — entry scan (9:35 AM ET only)
     runs-on: ubuntu-latest
-    # Macro only runs once — at market open (first 5-min window, ~13:30 UTC)
-    if: github.event_name == 'schedule' && (github.event.schedule == '*/5 13-20 * * 1-5') && startsWith(github.run_number, '1') == false
+    if: github.event_name == 'schedule'
     steps:
-      - name: Trigger engine (entry, first run only)
+      - name: Trigger
         run: |
-          MINUTE=$(date -u +%M)
           HOUR=$(date -u +%H)
-          # Only fire macro entry once at 13:35 UTC (9:35 AM ET)
+          MINUTE=$(date -u +%M)
+          # Only fire macro entry at 13:35 UTC (9:35 AM ET) ±5 min window
           if [ "$HOUR" = "13" ] && [ "$MINUTE" -ge "35" ] && [ "$MINUTE" -lt "40" ]; then
-            curl -sf -X GET \
+            echo "Macro entry window — calling at $(date -u)"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
               "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=macro" \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              | jq '{signals, trades, errors}'
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "HTTP $HTTP_CODE"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            [ "$HTTP_CODE" -lt 400 ] || exit 1
           else
-            echo "Not macro entry window, skipping"
+            echo "Outside macro entry window (now ${HOUR}:${MINUTE} UTC), skipping"
           fi
 
   macro-exit:
-    name: Macro exit scan
+    name: Macro — exit scan (every 30 min)
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
-      - name: Trigger macro exit every 30 min
+      - name: Trigger
         run: |
           MINUTE=$(date -u +%M)
-          # Fire at :00 and :30 past each hour
+          # Fire at :00–:04 and :30–:34 past each hour
           if [ "$MINUTE" -lt "5" ] || ([ "$MINUTE" -ge "30" ] && [ "$MINUTE" -lt "35" ]); then
-            curl -sf -X GET \
+            echo "Macro exit window — calling at $(date -u)"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
               "${{ secrets.APP_URL }}/api/engine/run?phase=exit&trader_type=macro" \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              | jq '{exits, errors}'
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "HTTP $HTTP_CODE"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            [ "$HTTP_CODE" -lt 400 ] || exit 1
           else
-            echo "Not macro exit window, skipping"
+            echo "Outside macro exit window (now :${MINUTE}), skipping"
           fi
 
   manual:
@@ -81,9 +100,19 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     steps:
-      - name: Trigger engine
+      - name: Trigger
         run: |
-          curl -sf -X GET \
-            "${{ secrets.APP_URL }}/api/engine/run?phase=${{ inputs.phase }}&trader_type=${{ inputs.trader_type }}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            | jq '.'
+          TRADER="${{ inputs.trader_type }}"
+          PHASE="${{ inputs.phase }}"
+          URL="${{ secrets.APP_URL }}/api/engine/run?phase=${PHASE}"
+          if [ -n "$TRADER" ]; then
+            URL="${URL}&trader_type=${TRADER}"
+          fi
+          echo "Calling $URL"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$URL" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          [ "$HTTP_CODE" -lt 400 ] || exit 1

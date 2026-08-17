@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     ? traderTypeParam
     : undefined;
 
+  const startedAt = Date.now();
   try {
     const results = await runEngine(phase, traderType);
 
@@ -44,19 +45,29 @@ export async function POST(req: NextRequest) {
     const totalTrades  = results.reduce((s, r) => s + r.trades.length, 0);
     const totalExits   = results.reduce((s, r) => s + r.exits.length, 0);
     const totalErrors  = results.reduce((s, r) => s + r.errors.length, 0);
+    const skipped      = results.length === 0 ? "market_closed" : null;
 
-    return NextResponse.json({
+    const response = {
+      ok: true,
       phase,
+      traderType: traderType ?? "all",
+      ranAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      marketClosed: results.length === 0,
       traders: results.length,
       signals: totalSignals,
       trades:  totalTrades,
       exits:   totalExits,
       errors:  totalErrors,
+      ...(skipped ? { skipped } : {}),
       detail:  results,
-    });
+    };
+
+    console.log(`[engine/run] ${phase} ${traderType ?? "all"} — ${totalSignals} signals, ${totalTrades} trades, ${totalErrors} errors (${Date.now() - startedAt}ms)`);
+    return NextResponse.json(response);
   } catch (e) {
     console.error("[engine/run]", e);
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e), phase, ranAt: new Date().toISOString() }, { status: 500 });
   }
 }
 

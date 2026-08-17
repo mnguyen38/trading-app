@@ -16,7 +16,7 @@ import {
   signalEconomicCycle,
   signalSwingTrade,
   checkMicroExits,
-  type SignalFired,
+  type SignalResult,
   type ExitFired,
   type OrderSpec,
   type SignalContext,
@@ -24,7 +24,7 @@ import {
 
 // ── Signal function registry ──────────────────────────────────────────────────
 
-const SIGNAL_FNS: Record<string, (ctx: SignalContext) => Promise<SignalFired | null>> = {
+const SIGNAL_FNS: Record<string, (ctx: SignalContext) => Promise<SignalResult>> = {
   "vol-spread-long":    signalVolSpreadLong,
   "vrp-premium-seller": signalVrpPremiumSeller,
   "earnings-iv-crush":  signalEarningsIVCrush,
@@ -136,10 +136,10 @@ async function pushToTrader(traderId: string, title: string, body: string) {
 export type RunResult = {
   traderId: string;
   phase: "entry" | "exit";
-  signals: { strategy: string; underlying: string; reason: string }[];
+  signals: { strategy: string; underlying: string; reason: string; log: string[] }[];
   trades: { strategy: string; symbol: string; side: string; qty: number }[];
   exits: { symbol: string; reason: string }[];
-  skipped: { strategy: string; reason: string }[];
+  skipped: { strategy: string; reason: string; log: string[] }[];
   errors: { strategy: string; error: string }[];
 };
 
@@ -208,7 +208,7 @@ export async function runEngineForTrader(
     });
 
     if (activePositions.length >= strategy.maxPositions) {
-      result.skipped.push({ strategy: strategy.slug, reason: `at max ${strategy.maxPositions} positions` });
+      result.skipped.push({ strategy: strategy.slug, reason: `at max ${strategy.maxPositions} positions`, log: [] });
       continue;
     }
 
@@ -223,21 +223,25 @@ export async function runEngineForTrader(
       stateMap,
     };
 
-    let fired: SignalFired | null = null;
+    let signalResult: SignalResult;
     try {
-      fired = await fn(ctx);
+      signalResult = await fn(ctx);
     } catch (e) {
       result.errors.push({ strategy: strategy.slug, error: String(e) });
       continue;
     }
 
-    if (!fired) continue;
+    const { fired, log } = signalResult;
+
+    if (!fired) {
+      result.skipped.push({ strategy: strategy.slug, reason: "no signal", log });
+      continue;
+    }
 
     // Always save state updates (even if no orders)
     if (fired.stateUpdates.length) {
       try {
         await saveStateUpdates(traderId, fired.strategySlug || strategy.slug, fired.stateUpdates);
-        // Update local map so subsequent strategies in this run see fresh state
         for (const u of fired.stateUpdates) stateMap.set(u.key, u.value);
       } catch (e) {
         result.errors.push({ strategy: strategy.slug, error: `state save: ${String(e)}` });
@@ -250,6 +254,7 @@ export async function runEngineForTrader(
       strategy: strategy.slug,
       underlying: fired.underlying,
       reason: fired.reason,
+      log,
     });
 
     // Place each order in the signal
@@ -310,6 +315,21 @@ export async function runEngine(
 ): Promise<RunResult[]> {
   const all = await getAllTraders();
   const traders = traderType ? all.filter(t => t.type === traderType) : all;
+
+  // Bail early if market is closed — check clock using first trader's alpaca client
+  if (traders.length > 0) {
+    try {
+      const clock = await alpacaForTrader(traders[0]).getClock();
+      if (!clock.is_open) {
+        console.log(`[engine] Market closed — skipping ${phase} run at ${new Date().toISOString()}`);
+        return [];
+      }
+    } catch (e) {
+      console.warn("[engine] Could not fetch market clock:", e);
+      // Continue anyway — don't block on clock failure
+    }
+  }
+
   const results = await Promise.allSettled(
     traders.map(t => runEngineForTrader(t.id, phase)),
   );
