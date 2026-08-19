@@ -171,8 +171,11 @@ export async function signalVolSpreadLong(ctx: SignalContext): Promise<SignalRes
   return { fired: null, log };
 }
 
-// ── Micro: VRP Premium Seller ─────────────────────────────────────────────────
-// Bakshi & Kapadia 2003: sell OTM strangle when IV > HV + 5pts.
+// ── Micro: VRP Covered Call ───────────────────────────────────────────────────
+// Bakshi & Kapadia (2003): options are overpriced when IV > HV — sellers win.
+// Implemented as a covered call (buy stock + sell OTM call) since Alpaca paper
+// accounts do not allow uncovered (naked) option writing.
+// Covered calls are Alpaca Level 1 — always permitted.
 
 export async function signalVrpPremiumSeller(ctx: SignalContext): Promise<SignalResult> {
   const slug = "vrp-premium-seller";
@@ -216,21 +219,25 @@ export async function signalVrpPremiumSeller(ctx: SignalContext): Promise<Signal
       continue;
     }
 
+    // OTM call to sell (covered by the stock we're buying)
     const strangle = await selectStrangleStrikes(ctx.alpaca, sym, price, ivEst.iv, ivEst.dte);
     if (!strangle) {
-      log.push(`${sym}: VRP ${spread.toFixed(1)}pt ✓ but no 25-delta strangle contracts found`);
+      log.push(`${sym}: VRP ${spread.toFixed(1)}pt ✓ but no OTM call contracts found`);
       continue;
     }
 
-    const reason = `${sym}: IV ${ivEst.iv.toFixed(1)}% − HV30 ${hv.toFixed(1)}% = ${spread.toFixed(1)}pt VRP — selling strangle`;
+    // Round down to nearest 100 shares (1 option contract = 100 shares)
+    const shareQty = Math.max(100, Math.floor(ctx.perPositionBudget / price / 100) * 100);
+    const contractQty = Math.floor(shareQty / 100);
+    const reason = `${sym}: IV ${ivEst.iv.toFixed(1)}% − HV30 ${hv.toFixed(1)}% = ${spread.toFixed(1)}pt VRP — covered call: buy ${shareQty} shares, sell ${contractQty}× ${strangle.callSymbol}`;
     log.push(`${sym}: ✓ SIGNAL — ${reason}`);
 
     return {
       fired: {
         strategySlug: slug, underlying: sym, reason,
         orders: [
-          { asset: "option", symbol: strangle.callSymbol, underlying: sym, side: "sell", qty: 1, orderType: "market" },
-          { asset: "option", symbol: strangle.putSymbol,  underlying: sym, side: "sell", qty: 1, orderType: "market" },
+          { asset: "stock",  symbol: sym,                 underlying: sym, side: "buy",  qty: shareQty,    orderType: "market" },
+          { asset: "option", symbol: strangle.callSymbol, underlying: sym, side: "sell", qty: contractQty, orderType: "market" },
         ],
         stateUpdates: [],
       },
@@ -241,8 +248,11 @@ export async function signalVrpPremiumSeller(ctx: SignalContext): Promise<Signal
   return { fired: null, log };
 }
 
-// ── Micro: Earnings IV Crush ──────────────────────────────────────────────────
-// Jongadsayakul: sell strangle 5-7 days before earnings, close morning after.
+// ── Micro: Earnings Covered Call ─────────────────────────────────────────────
+// Jongadsayakul: covered call returns are highest when IV is elevated.
+// Buy stock + sell OTM call right before earnings to collect inflated premium.
+// The IV crush after the announcement drops the call's value — buy it back cheap.
+// Implemented as covered call (not naked) so Alpaca Level 1 permits it.
 
 export async function signalEarningsIVCrush(ctx: SignalContext): Promise<SignalResult> {
   const slug = "earnings-iv-crush";
@@ -282,22 +292,25 @@ export async function signalEarningsIVCrush(ctx: SignalContext): Promise<SignalR
       continue;
     }
 
+    // Get an OTM call expiring right after earnings to sell (covered by the stock)
     const daysToEvent = Math.ceil((new Date(event.date).getTime() - Date.now()) / 86400_000);
-    const contracts = await selectPostEarningsExpiry(ctx.alpaca, sym, daysToEvent + 1);
-    if (!contracts) {
-      log.push(`${sym}: earnings ${event.date} — IV ${ivEst.iv.toFixed(1)}% ✓ but no post-earnings expiry contracts found`);
+    const otmCall = await selectStrangleStrikes(ctx.alpaca, sym, price, ivEst.iv, daysToEvent + 1);
+    if (!otmCall) {
+      log.push(`${sym}: IV ${ivEst.iv.toFixed(1)}% ✓ but no OTM call contracts found for post-earnings expiry`);
       continue;
     }
 
-    const reason = `${sym}: earnings ${event.date} (${event.timing}), IV ${ivEst.iv.toFixed(1)}% ≥ 40% — selling strangle for IV crush`;
+    const shareQty    = Math.max(100, Math.floor(ctx.perPositionBudget / price / 100) * 100);
+    const contractQty = Math.floor(shareQty / 100);
+    const reason = `${sym}: earnings ${event.date} (${event.timing}), IV ${ivEst.iv.toFixed(1)}% ≥ 40% — covered call: buy ${shareQty} shares, sell ${contractQty}× ${otmCall.callSymbol}`;
     log.push(`${sym}: ✓ SIGNAL — ${reason}`);
 
     return {
       fired: {
         strategySlug: slug, underlying: sym, reason,
         orders: [
-          { asset: "option", symbol: contracts.callSymbol, underlying: sym, side: "sell", qty: 1, orderType: "market" },
-          { asset: "option", symbol: contracts.putSymbol,  underlying: sym, side: "sell", qty: 1, orderType: "market" },
+          { asset: "stock",  symbol: sym,               underlying: sym, side: "buy",  qty: shareQty,    orderType: "market" },
+          { asset: "option", symbol: otmCall.callSymbol, underlying: sym, side: "sell", qty: contractQty, orderType: "market" },
         ],
         stateUpdates: [],
       },

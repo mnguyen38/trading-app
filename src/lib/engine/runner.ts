@@ -77,17 +77,45 @@ async function saveStateUpdates(
 
 // ── Order execution ───────────────────────────────────────────────────────────
 
+// Maximum acceptable bid-ask spread as a fraction of mid-price.
+// 30% is generous for options but filters out obviously illiquid contracts.
+const MAX_SPREAD_FRACTION = 0.30;
+const MIN_BID_SIZE = 1; // at least 1 contract quoted on each side
+
 async function executeOrder(
   alpaca: ReturnType<typeof alpacaForTrader>,
   spec: OrderSpec,
 ) {
   if (spec.asset === "option") {
+    // Fetch live quote to check liquidity and use limit order at mid-price
+    let limitPrice: string | undefined;
+    try {
+      const snap = await alpaca.getOptionsSnapshots([spec.symbol]);
+      const q = snap.snapshots?.[spec.symbol]?.latestQuote;
+      if (q && q.bp > 0 && q.ap > 0 && q.bs >= MIN_BID_SIZE && q.as >= MIN_BID_SIZE) {
+        const spread = q.ap - q.bp;
+        const mid    = (q.ap + q.bp) / 2;
+        if (spread / mid > MAX_SPREAD_FRACTION) {
+          throw new Error(
+            `spread too wide: bid $${q.bp} / ask $${q.ap} = ${((spread / mid) * 100).toFixed(0)}% (max ${MAX_SPREAD_FRACTION * 100}%)`,
+          );
+        }
+        // Use limit order at mid-price, rounded to nearest cent
+        limitPrice = mid.toFixed(2);
+      }
+    } catch (e) {
+      // If it's our own spread error, rethrow so the caller logs it
+      if (e instanceof Error && e.message.startsWith("spread too wide")) throw e;
+      console.warn(`[engine] snapshot fetch failed for ${spec.symbol}, falling back to market order:`, e);
+    }
+
     return alpaca.placeOptionOrder({
-      symbol: spec.symbol,
-      side: spec.side,
-      type: "market",
-      time_in_force: "day",
-      qty: String(spec.qty),
+      symbol:         spec.symbol,
+      side:           spec.side,
+      type:           limitPrice ? "limit" : "market",
+      time_in_force:  "day",
+      qty:            String(spec.qty),
+      ...(limitPrice ? { limit_price: limitPrice } : {}),
     });
   }
 
@@ -200,6 +228,9 @@ export async function runEngineForTrader(
   }
 
   // ── ENTRY PHASE ─────────────────────────────────────────────────────────────
+  // Track underlyings traded THIS run so two strategies can't pick the same stock
+  const tradedThisRun = new Set<string>();
+
   for (const strategy of strategies) {
     const fn = SIGNAL_FNS[strategy.slug];
     if (!fn) continue;
@@ -256,6 +287,17 @@ export async function runEngineForTrader(
 
     if (!fired.orders.length) continue;
 
+    // Skip if another strategy already traded this underlying this run
+    if (fired.underlying && tradedThisRun.has(fired.underlying.toUpperCase())) {
+      result.skipped.push({
+        strategy: strategy.slug,
+        reason: `${fired.underlying} already traded by another strategy this run`,
+        log,
+      });
+      continue;
+    }
+    if (fired.underlying) tradedThisRun.add(fired.underlying.toUpperCase());
+
     result.signals.push({
       strategy: strategy.slug,
       underlying: fired.underlying,
@@ -265,32 +307,43 @@ export async function runEngineForTrader(
 
     // Place each order in the signal
     for (const spec of fired.orders) {
+      let orderId: string | undefined;
       try {
         const order = await executeOrder(alpaca, spec);
+        orderId = order.id;
         result.trades.push({
           strategy: strategy.slug,
           symbol: spec.symbol,
           side: spec.side,
           qty: spec.qty,
         });
+      } catch (e) {
+        result.errors.push({ strategy: strategy.slug, error: `order ${spec.symbol}: ${String(e)}` });
+        continue;
+      }
 
-        // Record in strategyTrades (always store underlying for options too)
+      // Record trade and send push — failures here don't roll back the order
+      try {
         await db.insert(strategyTrades).values({
           id: crypto.randomUUID(),
           traderId,
           strategySlug: strategy.slug,
-          orderId: order.id,
+          orderId,
           symbol: spec.underlying,
           side: spec.side,
         });
+      } catch (e) {
+        console.error(`[engine] strategyTrades insert failed for ${spec.symbol}:`, e);
+      }
 
+      try {
         await pushToTrader(
           traderId,
           `Engine: ${strategy.name}`,
           `${spec.side.toUpperCase()} ${spec.qty}× ${spec.symbol} — ${fired.reason}`,
         );
       } catch (e) {
-        result.errors.push({ strategy: strategy.slug, error: `order ${spec.symbol}: ${String(e)}` });
+        console.error(`[engine] push notification failed for ${spec.symbol}:`, e);
       }
     }
   }

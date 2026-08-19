@@ -110,34 +110,34 @@ export const STRATEGIES: Strategy[] = [
 
   {
     slug: "vrp-premium-seller",
-    name: "VRP Premium Seller",
+    name: "RSI Reversal",
     type: "micro",
     thesis:
-      "Implied volatility exceeds realised volatility approximately 85% of the time — options are structurally overpriced. Bakshi & Kapadia (2003) proved this by showing delta-hedged call positions earn negative returns on average (option buyers are systematically overpaying for vol). Selling premium collects this 'volatility risk premium' (VRP). Dew-Becker & Giglio document the VRP is positive ~79% of the time for SPY at 30 DTE, though the edge has diminished post-2012.",
+      "Stocks rarely move in one direction forever. RSI (Relative Strength Index) measures momentum on a 0–100 scale: below 30 means oversold (sold too hard, likely to bounce), above 70 means overbought (bought too hard, likely to fade). Buying a call when RSI < 30 or a put when RSI > 70 bets on mean reversion — the stock snapping back toward its average. Near-term ATM options give leveraged exposure to that move.",
     academicBasis:
-      "Bakshi & Kapadia (2003), RFS — 'Delta-Hedged Gains and the Negative Market Volatility Risk Premium'. Delta-hedged long calls earn negative returns; the effect is largest for ATM options and in high-RV environments. Dew-Becker & Giglio — 'The Decline of the Variance Risk Premium' — VRP positive ~79% of the time but structural break ~2012 means blind selling is riskier now.",
-    posture: "short_vol",
+      "Mean reversion in equity prices is well-documented (Poterba & Summers 1988, De Bondt & Thaler 1985). RSI was developed by Welles Wilder (1978) as a practical implementation of momentum reversal. Option-based implementation concentrates the bet with defined risk: max loss is the premium paid, while a 10–15% snap-back in the stock can return 200–400% on an ATM near-term option.",
+    posture: "long_vol",
     optionPreference: "both",
-    timeHorizon: "30–45 DTE; target exit at 21 DTE or 50% profit",
-    instruments: "Options — short strangle (sell OTM call + sell OTM put) or covered call on existing stock",
-    entrySignal: "Triple-confirm: IVR ≥ 30, IVP ≥ 50, AND IV exceeds 30-day HV by ≥ 5 volatility points",
-    allocationPct: 30,
+    timeHorizon: "28–45 DTE; exit at +25% gain, −30% stop, or 21 DTE",
+    instruments: "Options — buy ATM call (oversold bounce) or ATM put (overbought fade)",
+    entrySignal: "RSI(14) < 30 → buy call | RSI(14) > 70 → buy put",
+    allocationPct: 25,
     maxPositions: 3,
     perTradeSizing:
-      "Short strangles need collateral — Alpaca requires ~20% of the underlying stock price per leg as margin. With 30% of $100k = $30,000 as your collateral pool, and a $200 stock needing ~$4,000 margin per strangle, you can safely run 3 concurrent strangles (3 × $10,000 = $30,000 reserved). Aim to collect $500–750 in net premium per strangle (0.5–0.75% of collateral), targeting a 50% profit close.",
+      "With 25% of account as the options budget, split across max 3 reversal plays. Size each position so the premium cost ≤ 1% of account equity — this keeps a total wipeout of all 3 to a manageable 3%.",
     buyRules: [
-      "All three conditions: IVR ≥ 30, IVP ≥ 50, IV > HV by ≥ 5 pts — all must be true simultaneously",
-      "Sell a strangle: OTM call and OTM put each at ~0.25–0.30 delta, same expiry 30–45 DTE",
-      "Check that VRP is NOT negative: if HV > IV, skip this setup entirely",
-      "Collect premium — your max profit is the total premium received at entry",
+      "RSI(14) < 30: stock is oversold — buy an ATM call expecting a bounce back to the 50MA",
+      "RSI(14) > 70: stock is overbought — buy an ATM put expecting a fade to the 50MA",
+      "Best when the RSI extreme happens near a major price support or resistance level",
+      "Prefer stocks with upcoming catalysts: earnings, product launches, macro events",
     ],
     sellRules: [
-      "Close (buy back) at 50% of premium collected — half profit before gamma risk grows",
-      "Close at 21 DTE even if not at 50% profit — gamma accelerates near expiry",
-      "Roll or close immediately if the underlying moves within 1 strike of either short leg",
+      "Take profit at +25% on the option position — RSI reversals can be quick",
+      "Cut loss at −30% — if RSI continues extreme, the trade thesis is wrong",
+      "Close at 21 DTE regardless — theta decay makes it too expensive to hold",
     ],
     riskNote:
-      "Short strangles have theoretically unlimited loss on the call side. The post-2012 VRP structural decline (Dew-Becker & Giglio) means this strategy is less reliable than historical studies suggest. Never sell into a VRP inversion (HV > IV).",
+      "RSI can stay extreme for extended periods in strong trends. In a sustained downtrend, RSI < 30 can persist for weeks — buying calls in a bear market is a common mistake. Always check the broader trend (SPY direction) before entering.",
     exampleTickers: [
       "AAPL", "TSLA", "NVDA", "SPY",  "AMZN",
       "META", "MSFT", "GOOGL","NFLX", "AMD",
@@ -148,35 +148,34 @@ export const STRATEGIES: Strategy[] = [
 
   {
     slug: "earnings-iv-crush",
-    name: "Earnings IV Crush",
+    name: "Earnings Straddle",
     type: "micro",
     thesis:
-      "IV spikes in the week before an earnings announcement as the market prices in uncertainty. After the announcement — regardless of which direction the stock moves — IV collapses back to normal levels instantly ('IV crush'). Jongadsayakul showed covered call returns improve significantly when IV is elevated. Bakshi & Kapadia showed ATM options carry the heaviest overpricing penalty. Selling a short-dated strangle before earnings collects the inflated premium, then buys it back for far less after crush.",
+      "IV spikes to extreme levels in the week before earnings — the market is paying up for uncertainty. The academic edge is on the SELL side (Jongadsayakul: covered calls earn most when IV is elevated; sellers collect the IV crush). This strategy takes the opposite long side: if the actual earnings move is LARGER than what IV implies, the straddle buyer wins. This is a bet that the market is underestimating how big the move will be. Note: on average the sellers win — but individual earnings can wildly exceed expectations.",
     academicBasis:
-      "Jongadsayakul — 'Return Determinants of Option Strategies: Evidence from Protective Put and Covered Call'. Covered call returns are highest when IV is elevated. Bakshi & Kapadia (2003) — ATM options carry the largest negative delta-hedged gain; overpricing is worst at-the-money, precisely where earnings IV spikes concentrate.",
-    posture: "short_vol",
+      "Jongadsayakul — 'Return Determinants of Option Strategies'. Covered call (i.e. short vol) returns are highest when IV is elevated. This strategy takes the long side of that same trade — lower expected value but unlimited upside if the move exceeds the implied move. Best used to learn why IV crush happens and how options price uncertainty.",
+    posture: "long_vol",
     optionPreference: "both",
     timeHorizon: "5–7 days — open 1 week before earnings, close the morning after",
-    instruments: "Options — short strangle on weekly expiry right after earnings",
-    entrySignal: "Earnings date confirmed within 5–7 days AND IVR > 50% (elevated from the event premium build-up)",
+    instruments: "Options — long ATM straddle on weekly expiry right after earnings",
+    entrySignal: "Earnings date confirmed within 5–7 days AND pre-earnings IV ≥ 40%",
     allocationPct: 15,
     maxPositions: 3,
     perTradeSizing:
-      "With 15% of $100k = $15,000 as the collateral pool, run max 3 concurrent earnings plays of $5,000 each. Earnings don't cluster that much, so 2–3 plays per week is realistic. Target $300–500 premium per strangle (6–10% of deployed capital), looking to collect 60–70% of that in IV crush the next morning.",
+      "With 15% of account as the options budget, max 3 concurrent earnings plays. Each straddle costs the combined ATM call + put premium × 100 shares. The breakeven requires the stock to move more than the combined premium / stock price in percentage terms.",
     buyRules: [
-      "Confirm the earnings date (Earnings Whispers or company IR page) is within 5–7 days",
-      "Confirm IVR > 50 — IV must already be elevated from the approaching event",
-      "Sell weekly options expiring right after the earnings announcement: OTM call + OTM put at ~0.20 delta",
-      "Enter 5–7 days before the announcement to collect maximum event premium",
+      "Earnings date confirmed within 5–7 days",
+      "IV ≥ 40% — pre-earnings premium must be elevated for the setup to make sense",
+      "Buy ATM call + ATM put on weekly expiry expiring right after the earnings announcement",
+      "Understand the implied move: straddle cost / stock price = what the options expect",
     ],
     sellRules: [
-      "Close the position the morning after the earnings announcement — non-negotiable",
-      "IV will have crushed overnight; buy back the strangle for 50–70% less than you collected",
-      "Do NOT hold to expiry hoping for more — risk/reward flips after IV crush",
-      "If stock makes an extreme move (gap beyond your strikes), close at the open immediately",
+      "Close the morning after earnings — non-negotiable. IV crush happens overnight",
+      "If the stock gaps far enough to cover the straddle cost, take profit immediately",
+      "If the move is smaller than expected, cut the loss — do not hold to expiry",
     ],
     riskNote:
-      "Only trade this on large-cap liquid stocks. Never sell earnings strangles on binary-event stocks (FDA approvals, merger votes) where the move is structurally unpredictable. An extreme post-earnings gap can overwhelm the collected premium.",
+      "On average this trade LOSES — sellers collect IV crush most of the time. The value is educational: learning how IV spike and crush works, and identifying the rare cases where the move exceeds expectations. Size small.",
     exampleTickers: [
       "AAPL", "MSFT", "GOOGL","META", "AMZN",
       "NFLX", "NVDA", "AMD",  "CRM",  "TSLA",

@@ -83,7 +83,19 @@ async function run() {
   `);
   console.log("✓ scanner_cache table + index");
 
-  // 7. Show current traders so you know what to set
+  // 7. push_subscriptions table
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+      "id" text PRIMARY KEY NOT NULL,
+      "trader_id" text NOT NULL REFERENCES "traders"("id"),
+      "endpoint" text NOT NULL,
+      "subscription" jsonb NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    );
+  `);
+  console.log("✓ push_subscriptions table");
+
+  // 8. Show current traders so you know what to set
   const traders = await sql`SELECT id, name, type FROM traders ORDER BY name`;
   console.log("\nCurrent traders:");
   for (const t of traders) {
