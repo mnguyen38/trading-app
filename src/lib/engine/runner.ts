@@ -22,6 +22,7 @@ import {
   type SignalContext,
 } from "./signals";
 import { loadScanList } from "./scanner";
+import { isNYSEOpen } from "../marketHours";
 
 // ── Signal function registry ──────────────────────────────────────────────────
 
@@ -318,20 +319,27 @@ export async function runEngine(
   phase: "entry" | "exit",
   traderType?: "micro" | "macro",
 ): Promise<RunResult[]> {
+  // ET-based market hours check (fast, no API call needed)
+  if (!isNYSEOpen()) {
+    const etTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+    console.log(`[engine] Market closed (ET: ${etTime}) — skipping ${phase}`);
+    return [];
+  }
+
   const all = await getAllTraders();
   const traders = traderType ? all.filter(t => t.type === traderType) : all;
 
-  // Bail early if market is closed — check clock using first trader's alpaca client
+  // Verify with Alpaca clock — handles market holidays that isNYSEOpen() can't know about
   if (traders.length > 0) {
     try {
       const clock = await alpacaForTrader(traders[0]).getClock();
       if (!clock.is_open) {
-        console.log(`[engine] Market closed — skipping ${phase} run at ${new Date().toISOString()}`);
+        console.log(`[engine] Market holiday/early-close (Alpaca clock) — skipping ${phase}`);
         return [];
       }
     } catch (e) {
-      console.warn("[engine] Could not fetch market clock:", e);
-      // Continue anyway — don't block on clock failure
+      console.warn("[engine] Could not fetch Alpaca market clock:", e);
+      // Continue — ET check already passed, don't block on Alpaca failure
     }
   }
 

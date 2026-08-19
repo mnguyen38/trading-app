@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runEngine } from "@/src/lib/engine/runner";
+import { isNYSEOpen } from "@/src/lib/marketHours";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5-minute timeout — engine scans many tickers
@@ -37,6 +38,28 @@ export async function POST(req: NextRequest) {
     ? traderTypeParam
     : undefined;
 
+  // ET market-hours gate — checked before any DB or Alpaca calls
+  if (!isNYSEOpen()) {
+    const etTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+    console.log(`[engine/run] Market closed (ET: ${etTime}) — skipping ${phase}`);
+    return NextResponse.json({
+      ok: true,
+      phase,
+      traderType: traderType ?? "all",
+      ranAt: new Date().toISOString(),
+      durationMs: 0,
+      marketClosed: true,
+      traders: 0,
+      signals: 0,
+      trades: 0,
+      exits: 0,
+      errors: 0,
+      skipped: "market_closed",
+      etTime,
+      detail: [],
+    });
+  }
+
   const startedAt = Date.now();
   try {
     const results = await runEngine(phase, traderType);
@@ -45,7 +68,8 @@ export async function POST(req: NextRequest) {
     const totalTrades  = results.reduce((s, r) => s + r.trades.length, 0);
     const totalExits   = results.reduce((s, r) => s + r.exits.length, 0);
     const totalErrors  = results.reduce((s, r) => s + r.errors.length, 0);
-    const skipped      = results.length === 0 ? "market_closed" : null;
+    // If results empty after market-open check, traders weren't found (type not set)
+    const skipped = results.length === 0 ? "no_traders" : null;
 
     const response = {
       ok: true,
@@ -53,7 +77,7 @@ export async function POST(req: NextRequest) {
       traderType: traderType ?? "all",
       ranAt: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
-      marketClosed: results.length === 0,
+      marketClosed: false,
       traders: results.length,
       signals: totalSignals,
       trades:  totalTrades,
