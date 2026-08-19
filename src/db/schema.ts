@@ -90,6 +90,14 @@ export const engineState = pgTable("engine_state", {
   updatedAt:    timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Scanner cache — refreshed pre-market, consumed by engine signal functions.
+export const scannerCache = pgTable("scanner_cache", {
+  id:          text("id").primaryKey(),
+  traderType:  traderTypeEnum("trader_type").notNull(),
+  tickers:     jsonb("tickers").notNull(), // ScanEntry[]
+  scannedAt:   timestamp("scanned_at").defaultNow().notNull(),
+});
+
 // Audit log for every automated engine run.
 export const engineRuns = pgTable("engine_runs", {
   id:       text("id").primaryKey(),

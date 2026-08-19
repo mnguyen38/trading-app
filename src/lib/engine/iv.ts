@@ -17,24 +17,44 @@ export type StrikeSelection = {
 
 const toDateStr = (d: Date) => d.toISOString().split("T")[0];
 
+// Fetches calls AND puts in separate requests to avoid the limit exhausting on one type.
+// When stockPrice is provided, adds a ±20% strike filter so the 100-contract limit isn't
+// wasted on far-OTM contracts from lower expiries before reaching the ATM range of later ones.
 async function fetchContracts(
   alpaca: AlpacaClient,
   underlying: string,
   minDte: number,
   maxDte: number,
-): Promise<OptionContract[]> {
+  stockPrice?: number,
+): Promise<{ contracts: OptionContract[]; error?: string }> {
   const today = new Date();
   const min = new Date(today.getTime() + minDte * 86400_000);
   const max = new Date(today.getTime() + maxDte * 86400_000);
+  const shared = {
+    expiration_date_gte: toDateStr(min),
+    expiration_date_lte: toDateStr(max),
+    limit: 100,
+    ...(stockPrice ? {
+      strike_price_gte: String(Math.floor(stockPrice * 0.80)),
+      strike_price_lte: String(Math.ceil(stockPrice * 1.20)),
+    } : {}),
+  };
   try {
-    const res = await alpaca.getOptionsContracts(underlying, {
-      expiration_date_gte: toDateStr(min),
-      expiration_date_lte: toDateStr(max),
-      limit: 100,
-    });
-    return res.option_contracts ?? [];
-  } catch {
-    return [];
+    const [callRes, putRes] = await Promise.all([
+      alpaca.getOptionsContracts(underlying, { ...shared, type: "call" }),
+      alpaca.getOptionsContracts(underlying, { ...shared, type: "put" }),
+    ]);
+    const contracts = [
+      ...(callRes.option_contracts ?? []),
+      ...(putRes.option_contracts ?? []),
+    ];
+    if (contracts.length === 0) {
+      return { contracts: [], error: `no contracts returned for ${minDte}–${maxDte} DTE window` };
+    }
+    return { contracts };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { contracts: [], error: msg };
   }
 }
 
@@ -55,12 +75,65 @@ function nearestExpiry(contracts: OptionContract[], targetDte: number): string |
   );
 }
 
-function atmStrike(contracts: OptionContract[], stockPrice: number): number {
-  const strikes = [...new Set(contracts.map(c => parseFloat(c.strike_price)))];
-  return strikes.reduce((best, s) =>
-    Math.abs(s - stockPrice) < Math.abs(best - stockPrice) ? s : best,
-    strikes[0],
-  );
+// Only consider strikes within ±7% for the B-S approximation.
+// Wider bands let deep-ITM/OTM close prices produce nonsense IV (e.g. 760% for NVDA $115 at $130).
+const ATM_BAND_PCT = 0.07;
+
+// Fetches live bid/ask snapshots for near-ATM contracts that lack close_price.
+// Returns a symbol→midPrice map for use in nearestPricedPair.
+async function fetchLivePrices(
+  alpaca: AlpacaClient,
+  contracts: OptionContract[],
+  stockPrice: number,
+): Promise<Map<string, number>> {
+  const band = stockPrice * ATM_BAND_PCT;
+  const needsQuote = contracts
+    .filter(c => !c.close_price && Math.abs(parseFloat(c.strike_price) - stockPrice) <= band)
+    .slice(0, 60); // cap snapshot batch size
+  if (needsQuote.length === 0) return new Map();
+  try {
+    const symbols = needsQuote.map(c => c.symbol);
+    const snap = await alpaca.getOptionsSnapshots(symbols);
+    const map = new Map<string, number>();
+    for (const [sym, data] of Object.entries(snap.snapshots)) {
+      const q = data.latestQuote;
+      if (q && q.ap > 0 && q.bp > 0) {
+        map.set(sym, (q.ap + q.bp) / 2); // mid-price
+      } else if (data.latestTrade?.p) {
+        map.set(sym, data.latestTrade.p);
+      }
+    }
+    return map;
+  } catch (e) {
+    console.warn(`[iv] snapshot fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+    return new Map();
+  }
+}
+
+// Finds the nearest near-ATM strike that has a price on BOTH call and put.
+// Checks close_price first (yesterday's close), then falls back to live snapshot mid-price.
+// Only considers strikes within ATM_BAND_PCT of stockPrice to keep the B-S approximation valid.
+function nearestPricedPair(
+  contracts: OptionContract[],
+  stockPrice: number,
+  livePrices: Map<string, number> = new Map(),
+): { call: OptionContract; put: OptionContract; strike: number; callPrice: number; putPrice: number } | null {
+  const getPrice = (c: OptionContract): number | null => {
+    if (c.close_price) return parseFloat(c.close_price);
+    return livePrices.get(c.symbol) ?? null;
+  };
+
+  const atmBand = stockPrice * ATM_BAND_PCT;
+  const strikes = [...new Set(contracts.map(c => parseFloat(c.strike_price)))]
+    .filter(s => Math.abs(s - stockPrice) <= atmBand)        // near-ATM only (±7%)
+    .sort((a, b) => Math.abs(a - stockPrice) - Math.abs(b - stockPrice));
+
+  for (const s of strikes) {
+    const call = contracts.find(c => parseFloat(c.strike_price) === s && c.type === "call" && getPrice(c) !== null);
+    const put  = contracts.find(c => parseFloat(c.strike_price) === s && c.type === "put"  && getPrice(c) !== null);
+    if (call && put) return { call, put, strike: s, callPrice: getPrice(call)!, putPrice: getPrice(put)! };
+  }
+  return null;
 }
 
 /**
@@ -75,31 +148,33 @@ export async function estimateIV(
   alpaca: AlpacaClient,
   underlying: string,
   stockPrice: number,
-): Promise<IVEstimate | null> {
-  const contracts = await fetchContracts(alpaca, underlying, 28, 50);
-  if (contracts.length === 0) return null;
+): Promise<IVEstimate & { fetchError?: string } | null> {
+  const { contracts, error } = await fetchContracts(alpaca, underlying, 28, 50, stockPrice);
+  if (contracts.length === 0) {
+    console.warn(`[iv] ${underlying}: ${error}`);
+    return null;
+  }
 
   const expiry = nearestExpiry(contracts, 38);
   if (!expiry) return null;
 
   const expContracts = contracts.filter(c => c.expiration_date === expiry);
-  const strike = atmStrike(expContracts, stockPrice);
-  const atm = expContracts.filter(c => parseFloat(c.strike_price) === strike);
+  const livePrices = await fetchLivePrices(alpaca, expContracts, stockPrice);
+  const pair = nearestPricedPair(expContracts, stockPrice, livePrices);
+  if (!pair) {
+    const liveFetched = livePrices.size;
+    console.warn(`[iv] ${underlying}: contracts found for ${expiry} but no strike has priced call+put (${liveFetched} live quotes fetched)`);
+    return null;
+  }
 
-  const call = atm.find(c => c.type === "call");
-  const put  = atm.find(c => c.type === "put");
-  if (!call?.close_price || !put?.close_price) return null;
-
-  const C = parseFloat(call.close_price);
-  const P = parseFloat(put.close_price);
-  const straddle = C + P;
+  const straddle = pair.callPrice + pair.putPrice;
   const dte = daysUntil(expiry);
   const T = dte / 365;
 
   // Brenner-Subrahmanyam: IV = sqrt(2π/T) × straddle / S
   const iv = Math.sqrt((2 * Math.PI) / T) * (straddle / stockPrice) * 100;
 
-  return { iv, straddle, dte, atmStrike: strike };
+  return { iv, straddle, dte, atmStrike: pair.strike };
 }
 
 /**
@@ -117,7 +192,7 @@ export async function selectStrangleStrikes(
   ivPct: number,
   targetDte = 38,
 ): Promise<StrikeSelection | null> {
-  const contracts = await fetchContracts(alpaca, underlying, 28, 50);
+  const { contracts } = await fetchContracts(alpaca, underlying, 28, 50, stockPrice);
   if (contracts.length === 0) return null;
 
   const expiry = nearestExpiry(contracts, targetDte);
@@ -129,8 +204,14 @@ export async function selectStrangleStrikes(
   const targetCallStrike = stockPrice * Math.exp(+0.67 * sigma);
   const targetPutStrike  = stockPrice * Math.exp(-0.67 * sigma);
 
-  const callContracts = contracts.filter(c => c.expiration_date === expiry && c.type === "call");
-  const putContracts  = contracts.filter(c => c.expiration_date === expiry && c.type === "put");
+  // Only consider OTM-ish contracts: calls above 85% of stock price, puts below 115%.
+  // Deep-ITM contracts would give nonsense strikes for a strangle.
+  const callContracts = contracts.filter(c =>
+    c.expiration_date === expiry && c.type === "call" && parseFloat(c.strike_price) >= stockPrice * 0.85
+  );
+  const putContracts = contracts.filter(c =>
+    c.expiration_date === expiry && c.type === "put" && parseFloat(c.strike_price) <= stockPrice * 1.15
+  );
 
   if (callContracts.length === 0 || putContracts.length === 0) return null;
 
@@ -163,21 +244,18 @@ export async function selectStraddleContracts(
   underlying: string,
   stockPrice: number,
 ): Promise<{ callSymbol: string; putSymbol: string; strike: number; expiry: string } | null> {
-  const contracts = await fetchContracts(alpaca, underlying, 28, 50);
+  const { contracts } = await fetchContracts(alpaca, underlying, 28, 50, stockPrice);
   if (contracts.length === 0) return null;
 
   const expiry = nearestExpiry(contracts, 38);
   if (!expiry) return null;
 
   const expContracts = contracts.filter(c => c.expiration_date === expiry);
-  const strike = atmStrike(expContracts, stockPrice);
-  const atm = expContracts.filter(c => parseFloat(c.strike_price) === strike);
+  const livePrices = await fetchLivePrices(alpaca, expContracts, stockPrice);
+  const pair = nearestPricedPair(expContracts, stockPrice, livePrices);
+  if (!pair) return null;
 
-  const call = atm.find(c => c.type === "call");
-  const put  = atm.find(c => c.type === "put");
-  if (!call || !put) return null;
-
-  return { callSymbol: call.symbol, putSymbol: put.symbol, strike, expiry };
+  return { callSymbol: pair.call.symbol, putSymbol: pair.put.symbol, strike: pair.strike, expiry };
 }
 
 /**
@@ -189,7 +267,7 @@ export async function selectPostEarningsExpiry(
   underlying: string,
   minDaysOut: number,
 ): Promise<{ callSymbol: string; putSymbol: string; strike: number; expiry: string } | null> {
-  const contracts = await fetchContracts(alpaca, underlying, minDaysOut, minDaysOut + 10);
+  const { contracts } = await fetchContracts(alpaca, underlying, minDaysOut, minDaysOut + 10);
   if (contracts.length === 0) return null;
 
   const expiry = nearestExpiry(contracts, minDaysOut + 2);
@@ -206,12 +284,9 @@ export async function selectPostEarningsExpiry(
   if (!stockPrice) return null;
 
   const expContracts = contracts.filter(c => c.expiration_date === expiry);
-  const strike = atmStrike(expContracts, stockPrice);
-  const atm = expContracts.filter(c => parseFloat(c.strike_price) === strike);
+  const livePrices = await fetchLivePrices(alpaca, expContracts, stockPrice);
+  const pair = nearestPricedPair(expContracts, stockPrice, livePrices);
+  if (!pair) return null;
 
-  const call = atm.find(c => c.type === "call");
-  const put  = atm.find(c => c.type === "put");
-  if (!call || !put) return null;
-
-  return { callSymbol: call.symbol, putSymbol: put.symbol, strike, expiry };
+  return { callSymbol: pair.call.symbol, putSymbol: pair.put.symbol, strike: pair.strike, expiry };
 }

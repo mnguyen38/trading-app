@@ -5,6 +5,7 @@ import type { Trader } from "./traders";
 
 const BASE = process.env.ALPACA_TRADING_BASE_URL ?? "https://paper-api.alpaca.markets/v2";
 const DATA_BASE = "https://data.alpaca.markets/v2";
+const OPTIONS_DATA_BASE = "https://data.alpaca.markets/v1beta1";
 
 // ----- Types (just the fields we use; expand as needed) -----
 
@@ -93,6 +94,11 @@ export type OptionContract = {
   strike_price: string;       // "150.00"
   open_interest: string | null;
   close_price: string | null;
+};
+
+export type OptionSnapshot = {
+  latestQuote?: { ap: number; bp: number; as: number; bs: number; t: string };
+  latestTrade?: { p: number; s: number; t: string };
 };
 
 export type PlaceOptionOrderInput = {
@@ -200,6 +206,14 @@ export class AlpacaClient {
     params.set("limit", String(opts.limit ?? 100));
     return this.req<{ option_contracts: OptionContract[]; next_page_token: string | null }>(
       BASE, "GET", `/options/contracts?${params}`,
+    );
+  }
+
+  getOptionsSnapshots(symbols: string[], feed = "indicative") {
+    if (symbols.length === 0) return Promise.resolve({ snapshots: {} as Record<string, OptionSnapshot> });
+    const params = new URLSearchParams({ symbols: symbols.join(","), feed });
+    return this.req<{ snapshots: Record<string, OptionSnapshot> }>(
+      OPTIONS_DATA_BASE, "GET", `/options/snapshots?${params}`,
     );
   }
 

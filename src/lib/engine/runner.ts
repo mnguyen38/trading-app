@@ -21,6 +21,7 @@ import {
   type OrderSpec,
   type SignalContext,
 } from "./signals";
+import { loadScanList } from "./scanner";
 
 // ── Signal function registry ──────────────────────────────────────────────────
 
@@ -160,12 +161,14 @@ export async function runEngineForTrader(
   const trader = traderRaw;
 
   const alpaca = alpacaForTrader(trader);
-  const [account, positions, tags] = await Promise.all([
+  const [account, positions, tags, microScanList, macroEquityList] = await Promise.all([
     alpaca.getAccount(),
     alpaca.getPositions(),
     db.select({ strategySlug: strategyTrades.strategySlug, symbol: strategyTrades.symbol })
       .from(strategyTrades)
       .where(eq(strategyTrades.traderId, traderId)),
+    trader.type === "micro" ? loadScanList("micro") : Promise.resolve(null),
+    trader.type === "macro" ? loadScanList("macro") : Promise.resolve(null),
   ]);
 
   const equity = parseFloat(account.equity);
@@ -221,6 +224,8 @@ export async function runEngineForTrader(
       positions,
       tags,
       stateMap,
+      microScanList,
+      macroEquityList,
     };
 
     let signalResult: SignalResult;

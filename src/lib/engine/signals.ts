@@ -3,6 +3,7 @@ import { parseOptionSymbol } from "../alpaca";
 import { hv30, rsi, sma, monthReturn, quarterReturn, high52w, lastClose } from "./indicators";
 import { estimateIV, selectStraddleContracts, selectStrangleStrikes, selectPostEarningsExpiry } from "./iv";
 import { getEarningsInWindow } from "./earningsFetcher";
+import { MICRO_UNIVERSE, MACRO_EQUITY_UNIVERSE_UNIQUE } from "./universe";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,10 @@ export type SignalContext = {
   positions: Position[];
   tags: { strategySlug: string; symbol: string }[];
   stateMap: Map<string, string>;
+  // Dynamic scanner shortlist — replaces static watchlists when present.
+  // null means scanner hasn't run yet; fall back to built-in universe.
+  microScanList: string[] | null;
+  macroEquityList: string[] | null;
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -88,18 +93,12 @@ function activeUnderlyings(
   return active;
 }
 
-// ── Priority watchlists ───────────────────────────────────────────────────────
+// ── Watchlists ────────────────────────────────────────────────────────────────
+// Sector/cycle ETFs are fixed — the scanner doesn't change these.
+// Equity lists fall back to these if the scanner cache is empty.
 
-const MICRO_SCAN: Record<string, string[]> = {
-  "vol-spread-long":    ["AAPL", "MSFT", "AMZN", "GOOGL", "NVDA", "META", "TSLA", "AMD"],
-  "vrp-premium-seller": ["AAPL", "TSLA", "NVDA",  "SPY",  "AMZN", "META", "MSFT", "GOOGL"],
-  "vrp-inversion-long": ["AAPL", "NVDA",  "TSLA",  "QQQ",  "SPY", "MSFT",  "AMD", "GOOGL"],
-};
-
-const SECTOR_ETFS    = ["XLK", "XLE", "XLF", "XLV", "XLI", "XLP", "XLU", "XLY", "XLRE", "XLC", "XLB"];
-const QUALITY_STOCKS = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "V", "JNJ", "UNH", "COST"];
-const CYCLE_TICKERS  = ["SPY", "TLT", "XLK", "XLP", "XLU", "XLI", "XLY", "XLF"];
-const SWING_STOCKS   = ["AAPL", "MSFT", "JPM", "HD", "UNH", "TSLA", "NVDA", "AMZN", "GS", "BA"];
+const SECTOR_ETFS   = ["XLK", "XLE", "XLF", "XLV", "XLI", "XLP", "XLU", "XLY", "XLRE", "XLC", "XLB"];
+const CYCLE_TICKERS = ["SPY", "TLT", "XLK", "XLP", "XLU", "XLI", "XLY", "XLF"];
 
 // ── Micro: Vol-Spread Long ────────────────────────────────────────────────────
 // Goyal & Saretto 2009: long straddle when IV < HV30.
@@ -107,13 +106,15 @@ const SWING_STOCKS   = ["AAPL", "MSFT", "JPM", "HD", "UNH", "TSLA", "NVDA", "AMZ
 export async function signalVolSpreadLong(ctx: SignalContext): Promise<SignalResult> {
   const slug = "vol-spread-long";
   const log: string[] = [];
+  const universe = ctx.microScanList ?? MICRO_UNIVERSE;
   const busy = activeUnderlyings(slug, ctx.tags, ctx.positions);
-  const scan = MICRO_SCAN[slug].filter(t => !busy.has(t));
+  const scan = universe.filter(t => !busy.has(t));
 
   if (!scan.length) {
-    return { fired: null, log: [`All ${MICRO_SCAN[slug].length} tickers already held — at max positions`] };
+    return { fired: null, log: [`All ${universe.length} candidates already held — at max positions`] };
   }
 
+  log.push(`Scanning ${scan.length} candidates (${ctx.microScanList ? "scanner" : "fallback"} list)`);
   const allBars = await Promise.allSettled(scan.map(t => bars(ctx.alpaca, t)));
 
   for (let i = 0; i < scan.length; i++) {
@@ -143,7 +144,6 @@ export async function signalVolSpreadLong(ctx: SignalContext): Promise<SignalRes
       continue;
     }
 
-    // IV < HV — candidate. Try to get contracts.
     const straddle = await selectStraddleContracts(ctx.alpaca, sym, price);
     if (!straddle) {
       log.push(`${sym}: IV ${ivEst.iv.toFixed(1)}% < HV30 ${hv.toFixed(1)}% ✓ but no ATM straddle contracts available`);
@@ -177,12 +177,14 @@ export async function signalVolSpreadLong(ctx: SignalContext): Promise<SignalRes
 export async function signalVrpPremiumSeller(ctx: SignalContext): Promise<SignalResult> {
   const slug = "vrp-premium-seller";
   const log: string[] = [];
+  const universe = ctx.microScanList ?? MICRO_UNIVERSE;
   const busy = activeUnderlyings(slug, ctx.tags, ctx.positions);
-  const scan = MICRO_SCAN[slug].filter(t => !busy.has(t));
+  const scan = universe.filter(t => !busy.has(t));
 
   if (!scan.length) {
-    return { fired: null, log: [`All ${MICRO_SCAN[slug].length} tickers already held — at max positions`] };
+    return { fired: null, log: [`All ${universe.length} candidates already held — at max positions`] };
   }
+  log.push(`Scanning ${scan.length} candidates (${ctx.microScanList ? "scanner" : "fallback"} list)`);
 
   const allBars = await Promise.allSettled(scan.map(t => bars(ctx.alpaca, t)));
 
@@ -312,12 +314,14 @@ export async function signalEarningsIVCrush(ctx: SignalContext): Promise<SignalR
 export async function signalVrpInversionLong(ctx: SignalContext): Promise<SignalResult> {
   const slug = "vrp-inversion-long";
   const log: string[] = [];
+  const universe = ctx.microScanList ?? MICRO_UNIVERSE;
   const busy = activeUnderlyings(slug, ctx.tags, ctx.positions);
-  const scan = MICRO_SCAN[slug].filter(t => !busy.has(t));
+  const scan = universe.filter(t => !busy.has(t));
 
   if (!scan.length) {
-    return { fired: null, log: [`All ${MICRO_SCAN[slug].length} tickers already held — at max positions`] };
+    return { fired: null, log: [`All ${universe.length} candidates already held — at max positions`] };
   }
+  log.push(`Scanning ${scan.length} candidates (${ctx.microScanList ? "scanner" : "fallback"} list)`);
 
   const spyBars = await bars(ctx.alpaca, "SPY");
   const spyCloses = spyBars.map(b => b.c);
@@ -465,12 +469,14 @@ export async function signalSectorRotation(ctx: SignalContext): Promise<SignalRe
 export async function signalQualityHold(ctx: SignalContext): Promise<SignalResult> {
   const slug = "quality-hold";
   const log: string[] = [];
+  const universe = ctx.macroEquityList ?? MACRO_EQUITY_UNIVERSE_UNIQUE;
   const busy = activeUnderlyings(slug, ctx.tags, ctx.positions);
-  const scan = QUALITY_STOCKS.filter(t => !busy.has(t));
+  const scan = universe.filter(t => !busy.has(t));
 
   if (!scan.length) {
-    return { fired: null, log: [`All ${QUALITY_STOCKS.length} quality stocks already held — at max positions`] };
+    return { fired: null, log: [`All ${universe.length} candidates already held — at max positions`] };
   }
+  log.push(`Scanning ${scan.length} candidates (${ctx.macroEquityList ? "scanner" : "fallback"} list)`);
 
   const allBars = await Promise.allSettled(scan.map(t => bars(ctx.alpaca, t)));
 
@@ -599,12 +605,14 @@ export async function signalEconomicCycle(ctx: SignalContext): Promise<SignalRes
 export async function signalSwingTrade(ctx: SignalContext): Promise<SignalResult> {
   const slug = "swing-trade";
   const log: string[] = [];
+  const universe = ctx.macroEquityList ?? MACRO_EQUITY_UNIVERSE_UNIQUE;
   const busy = activeUnderlyings(slug, ctx.tags, ctx.positions);
-  const scan = SWING_STOCKS.filter(t => !busy.has(t));
+  const scan = universe.filter(t => !busy.has(t));
 
   if (!scan.length) {
-    return { fired: null, log: [`All ${SWING_STOCKS.length} swing candidates already held — at max positions`] };
+    return { fired: null, log: [`All ${universe.length} candidates already held — at max positions`] };
   }
+  log.push(`Scanning ${scan.length} candidates (${ctx.macroEquityList ? "scanner" : "fallback"} list)`);
 
   const allBars = await Promise.allSettled(scan.map(t => bars(ctx.alpaca, t)));
 

@@ -1,0 +1,32 @@
+name: Ticker Scanner
+
+on:
+  schedule:
+    # 9:00 AM ET (14:00 UTC) on weekdays — before market open
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      trader_type:
+        description: 'micro, macro, or leave blank for both'
+        default: ''
+
+jobs:
+  scan:
+    name: Pre-market scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run scanner
+        run: |
+          TRADER="${{ inputs.trader_type }}"
+          URL="${{ secrets.APP_URL }}/api/scanner/run"
+          if [ -n "$TRADER" ]; then
+            URL="${URL}?trader_type=${TRADER}"
+          fi
+          echo "Running scanner at $(date -u)"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$URL" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          [ "$HTTP_CODE" -lt 400 ] || exit 1

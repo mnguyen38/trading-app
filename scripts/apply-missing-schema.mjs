@@ -70,7 +70,20 @@ async function run() {
   `);
   console.log("✓ engine_runs table");
 
-  // 6. Show current traders so you know what to set
+  // 6. scanner_cache table
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "scanner_cache" (
+      "id" text PRIMARY KEY NOT NULL,
+      "trader_type" "trader_type" NOT NULL,
+      "tickers" jsonb NOT NULL,
+      "scanned_at" timestamp DEFAULT now() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS "scanner_cache_trader_type_scanned_at_idx"
+      ON "scanner_cache" ("trader_type", "scanned_at" DESC);
+  `);
+  console.log("✓ scanner_cache table + index");
+
+  // 7. Show current traders so you know what to set
   const traders = await sql`SELECT id, name, type FROM traders ORDER BY name`;
   console.log("\nCurrent traders:");
   for (const t of traders) {

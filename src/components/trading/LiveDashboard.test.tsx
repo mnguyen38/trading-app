@@ -7,17 +7,17 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/src/hooks/useLiveAccount", () => ({
+vi.mock("../../hooks/useLiveAccount", () => ({
   useLiveAccount: vi.fn(),
 }));
 
-vi.mock("@/src/hooks/usePriceStream", () => ({
+vi.mock("../../hooks/usePriceStream", () => ({
   usePriceStream: vi.fn(),
 }));
 
 import { LiveDashboard } from "./LiveDashboard";
-import { useLiveAccount } from "@/src/hooks/useLiveAccount";
-import { usePriceStream } from "@/src/hooks/usePriceStream";
+import { useLiveAccount } from "../../hooks/useLiveAccount";
+import { usePriceStream } from "../../hooks/usePriceStream";
 
 const aaplPosition = {
   symbol: "AAPL",

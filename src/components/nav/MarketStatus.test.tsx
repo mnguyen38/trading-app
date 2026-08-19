@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-vi.mock("@/src/lib/marketHours", () => ({
+vi.mock("../../lib/marketHours", () => ({
   isNYSEOpen: vi.fn(),
 }));
 
 import { MarketStatus } from "./MarketStatus";
-import { isNYSEOpen } from "@/src/lib/marketHours";
+import { isNYSEOpen } from "../../lib/marketHours";
 
 describe("MarketStatus", () => {
   beforeEach(() => vi.clearAllMocks());

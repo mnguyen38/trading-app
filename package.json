@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "node --env-file=.env node_modules/vitest/dist/cli.js run --config vitest.integration.config.ts",
     "test:broker": "node --env-file=.env scripts/test-broker-api.mjs",
     "test:trading": "node --env-file=.env scripts/test-trading-api.mjs",
     "probe:features": "node --env-file=.env scripts/probe-trading-features.mjs",
