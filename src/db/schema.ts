@@ -31,14 +31,6 @@ export const notes = pgTable("notes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const lessonProgress = pgTable("lesson_progress", {
-  id:          text("id").primaryKey(),
-  traderId:    text("trader_id").notNull().references(() => traders.id),
-  lessonSlug:  text("lesson_slug").notNull(),
-  openedAt:    timestamp("opened_at").defaultNow().notNull(),
-  completedAt: timestamp("completed_at"),
-});
-
 export const settings = pgTable("settings", {
   traderId:             text("trader_id").primaryKey().references(() => traders.id),
   defaultChartTf:       chartTimeframeEnum("default_chart_tf").default("1D").notNull(),
@@ -46,13 +38,6 @@ export const settings = pgTable("settings", {
   oneClickTrading:      boolean("one_click_trading").default(false).notNull(),
   timezone:             text("timezone").default("America/New_York").notNull(),
   theme:                themeEnum("theme").default("dark").notNull(),
-});
-
-export const conceptViews = pgTable("concept_views", {
-  id:         text("id").primaryKey(),
-  traderId:   text("trader_id").notNull().references(() => traders.id),
-  conceptId:  text("concept_id").notNull(),
-  viewedAt:   timestamp("viewed_at").defaultNow().notNull(),
 });
 
 export const pushSubscriptions = pgTable("push_subscriptions", {

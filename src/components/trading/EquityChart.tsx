@@ -1,13 +1,19 @@
 export type ChartSeries = { name: string; color: string; points: { date: string; equity: number }[] };
 
-const W = 600;
-const H = 160;
 const PT = 8;   // pad top
 const PR = 8;   // pad right
 const PB = 22;  // pad bottom
 const PL = 60;  // pad left (y labels)
 
-export function EquityChart({ series }: { series: ChartSeries[] }) {
+export function EquityChart({
+  series,
+  width: W = 600,
+  height: H = 160,
+}: {
+  series: ChartSeries[];
+  width?: number;
+  height?: number;
+}) {
   const allPts = series.flatMap(s => s.points);
   if (allPts.length === 0) return null;
 
@@ -36,7 +42,10 @@ export function EquityChart({ series }: { series: ChartSeries[] }) {
       <line x1={PL} y1={PT}      x2={W - PR} y2={PT}      stroke="#262626" strokeWidth={1} />
       <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#262626" strokeWidth={1} />
 
+      <line x1={PL} y1={PT + cH / 2} x2={W - PR} y2={PT + cH / 2} stroke="#1c1c1c" strokeWidth={1} />
+
       {/* y labels */}
+      <text x={PL - 6} y={PT + cH / 2 + 3} textAnchor="end" fontSize={10} fill="#525252">{moneyK((minE + maxE) / 2)}</text>
       <text x={PL - 6} y={PT + 4}      textAnchor="end" fontSize={10} fill="#525252">{moneyK(maxE)}</text>
       <text x={PL - 6} y={PT + cH + 1} textAnchor="end" fontSize={10} fill="#525252">{moneyK(minE)}</text>
 

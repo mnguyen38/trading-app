@@ -4,14 +4,14 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Trading Lab",
     short_name: "Trading Lab",
-    description: "Paper-trading practice for new investors",
+    description: "Two automated strategies competing head-to-head on Alpaca paper trading",
     start_url: "/",
     id: "/",
     display: "standalone",
-    orientation: "portrait",
+    orientation: "any",
     background_color: "#0a0a0a",
     theme_color: "#0a0a0a",
-    categories: ["finance", "education"],
+    categories: ["finance"],
     icons: [
       {
         src: "/icon.png",
@@ -34,14 +34,14 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
-        name: "Trade",
-        url: "/trade",
-        description: "Place a trade",
+        name: "Performance",
+        url: "/performance",
+        description: "View strategy performance",
       },
       {
-        name: "Learn",
-        url: "/learn",
-        description: "Browse lessons",
+        name: "Strategies",
+        url: "/strategies",
+        description: "View strategy implementation",
       },
     ],
   };

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/src/lib/auth";
 import { getTraderById } from "@/src/lib/traders";
 import { alpacaForTrader, AlpacaError } from "@/src/lib/alpaca";
-import { completeLessonsByAction } from "@/src/lib/lessonCompletion";
 
 export async function closePosition(formData: FormData) {
   const traderId = await getSession();
@@ -26,6 +25,5 @@ export async function closePosition(formData: FormData) {
     redirect(`/positions/${symbol}?error=${msg}`);
   }
 
-  await completeLessonsByAction(traderId, "close-position");
   redirect("/");
 }

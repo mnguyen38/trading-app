@@ -4,24 +4,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Trading Lab",
-  description: "Paper-trading practice for new investors",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Trading Lab",
-  },
-  formatDetection: {
-    telephone: false,
-  },
+  description: "Two automated strategies competing head-to-head on Alpaca paper trading",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#0a0a0a",
-  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

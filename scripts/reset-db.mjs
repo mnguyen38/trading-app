@@ -5,8 +5,6 @@ import postgres from "postgres";
 const sql = postgres(process.env.DATABASE_URL, { ssl: "require" });
 
 const tables = [
-  "concept_views",
-  "lesson_progress",
   "notes",
   "equity_snapshots",
   "settings",

@@ -4,7 +4,6 @@ import { getSession } from "@/src/lib/auth";
 import { getTraderById } from "@/src/lib/traders";
 import { alpacaForTrader, AlpacaError } from "@/src/lib/alpaca";
 import type { PlaceOrderInput } from "@/src/lib/alpaca";
-import { completeLessonsByAction } from "@/src/lib/lessonCompletion";
 import { db } from "@/src/db/client";
 import { strategyTrades } from "@/src/db/schema";
 
@@ -54,11 +53,6 @@ export async function placeOrder(formData: FormData) {
       symbol,
       side,
     });
-  }
-
-  if (side === "buy") {
-    const action = (orderType === "limit" || orderType === "stop_limit") ? "limit-order" : "buy-order";
-    await completeLessonsByAction(traderId, action);
   }
 
   redirect("/");

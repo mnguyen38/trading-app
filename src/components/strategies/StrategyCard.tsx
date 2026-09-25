@@ -1,13 +1,11 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import type { Strategy } from "@/src/lib/strategies";
 import { money, signed } from "@/src/lib/format";
 
 type Props = {
   strategy: Strategy;
   activePl: number | null;
-  traderType: "micro" | "macro";
   accountEquity: number;
 };
 
@@ -23,14 +21,10 @@ const POSTURE_COLOR: Record<Strategy["posture"], string> = {
   directional: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
 };
 
-export function StrategyCard({ strategy, activePl, traderType, accountEquity }: Props) {
+export function StrategyCard({ strategy, activePl, accountEquity }: Props) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const hasPl = activePl !== null;
-  const ctaColor = traderType === "micro"
-    ? "bg-sky-500/15 text-sky-400 hover:bg-sky-500/25"
-    : "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25";
-
   // Compute live dollar allocation from actual account equity
   const bucketDollars = accountEquity * (strategy.allocationPct / 100);
   const perPositionDollars = bucketDollars / strategy.maxPositions;
@@ -158,14 +152,6 @@ export function StrategyCard({ strategy, activePl, traderType, accountEquity }: 
           </div>
         </div>
       )}
-
-      {/* CTA */}
-      <Link
-        href="/trade"
-        className={`block w-full rounded-lg py-2.5 text-center text-sm font-semibold transition ${ctaColor}`}
-      >
-        Trade this strategy →
-      </Link>
     </div>
   );
 }
