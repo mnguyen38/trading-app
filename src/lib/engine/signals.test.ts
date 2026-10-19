@@ -32,8 +32,16 @@ function makeBars(closes: number[], count = closes.length): Bar[] {
   const padded = closes.length < count
     ? [...Array(count - closes.length).fill(closes[0]), ...closes]
     : closes;
+  // Anchored to Date.now(), one day per bar back from "today" — NOT sequential day-of-month
+  // numbers in a fixed "2024-01-XX" string. The old scheme produced invalid dates like
+  // "2024-01-260" for any count over 31 (String(i+1).padStart(2,"0") doesn't truncate a
+  // 3-digit day back down to a valid calendar date). That was silently tolerated before the
+  // staleness guard's NaN-fail-open bug was fixed — bars() treated an unparseable age as
+  // "not stale" rather than stale. Fixing that bug (correctly) now rejects these bars unless
+  // their dates are real and recent.
+  const now = Date.now();
   return padded.map((c, i) => ({
-    t: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+    t: new Date(now - (padded.length - 1 - i) * 86_400_000).toISOString(),
     o: c, h: c * 1.01, l: c * 0.99, c, v: 5_000_000,
   }));
 }
