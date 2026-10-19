@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isNYSEOpen } from "./marketHours";
+import { isNYSEOpen, etDateString } from "./marketHours";
 
 describe("isNYSEOpen", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -76,5 +76,21 @@ describe("isNYSEOpen", () => {
   it("returns false at 4:00pm EST", () => {
     setEST(16, 0);
     expect(isNYSEOpen()).toBe(false);
+  });
+});
+
+describe("etDateString", () => {
+  it("uses the New York date, not the UTC date", () => {
+    // 02:00 UTC on 16 Oct is still 15 Oct in New York (EDT, UTC-4)
+    expect(etDateString(new Date("2024-10-16T02:00:00Z"))).toBe("2024-10-15");
+  });
+
+  it("matches the UTC date once it is daytime in New York", () => {
+    expect(etDateString(new Date("2024-10-15T18:00:00Z"))).toBe("2024-10-15");
+  });
+
+  it("handles the post-close snapshot time (22:05 UTC) in both EDT and EST", () => {
+    expect(etDateString(new Date("2024-10-15T22:05:00Z"))).toBe("2024-10-15");
+    expect(etDateString(new Date("2025-01-15T22:05:00Z"))).toBe("2025-01-15");
   });
 });

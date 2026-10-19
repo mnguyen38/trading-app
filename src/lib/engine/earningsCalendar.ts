@@ -1,10 +1,10 @@
 /**
  * Static earnings calendar. Update this list every weekend with the upcoming week's
- * announcements. The engine uses it to know when to enter Earnings IV Crush plays
- * (5-7 calendar days before the reporting date).
+ * announcements. Used by the /earnings info page and the scanner — no current trading
+ * strategy consumes this directly (the earnings-iv-crush strategy that once did was
+ * removed; see vrp-premium-short for its replacement).
  *
  * Source: Earnings Whispers (https://earningswhispers.com) or NASDAQ earnings calendar.
- * Only include tickers that are in the earnings-iv-crush exampleTickers list.
  */
 
 export type EarningsEvent = {

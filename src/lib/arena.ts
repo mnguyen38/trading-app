@@ -10,10 +10,10 @@ import {
 } from "@/src/server/actions/performance";
 import type { EngineRunRow } from "@/src/components/strategies/EngineLog";
 
-// Stable per-side colours so "orange = micro, sky = macro" holds on every page.
+// Stable per-side colours so "orange = micro, blue = macro" holds on every page.
 export const SIDE_COLOR: Record<Trader["type"], string> = {
-  micro: "#fb923c",
-  macro: "#38bdf8",
+  micro: "#c2410c",
+  macro: "#1d5fa8",
 };
 
 export const SIDE_LABEL: Record<Trader["type"], string> = {

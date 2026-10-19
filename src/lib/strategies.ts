@@ -22,8 +22,11 @@ export type Strategy = {
 // ── Capital allocation summary ────────────────────────────────────────────────
 // Micro (User 1): options strategies — long-vol capped at premium,
 //   short-vol needs collateral.
-//   Vol-Spread Long 20% + VRP Seller 30% + Earnings Crush 15% + VRP Inversion 15%
-//   + hard cash 5% + SGOV buffer 15% = 100%
+//   Vol-Spread Long 20% + VRP Seller 25% + VRP Premium Short 15% + VRP Inversion 15%
+//   + hard cash 5% + SGOV buffer 15% = 95% (5% currently unallocated headroom — a
+//   pre-existing gap from an earlier allocationPct adjustment, not something this file's
+//   per-strategy budget math depends on: each strategy sizes off its own allocationPct
+//   independently, so this total not summing to exactly 100% has no runtime effect).
 //
 //   The 20% buffer is split: 5% hard cash (instant margin protection, never invested)
 //   + 15% SGOV/BIL (T-bill ETF, earns ~5% yield, liquidates in 1 trading day).
@@ -147,40 +150,40 @@ export const STRATEGIES: Strategy[] = [
   },
 
   {
-    slug: "earnings-iv-crush",
-    name: "Earnings Straddle",
+    slug: "vrp-premium-short",
+    name: "VRP Premium Short",
     type: "micro",
     thesis:
-      "IV spikes to extreme levels in the week before earnings — the market is paying up for uncertainty. The academic edge is on the SELL side (Jongadsayakul: covered calls earn most when IV is elevated; sellers collect the IV crush). This strategy takes the opposite long side: if the actual earnings move is LARGER than what IV implies, the straddle buyer wins. This is a bet that the market is underestimating how big the move will be. Note: on average the sellers win — but individual earnings can wildly exceed expectations.",
+      "Dew-Becker & Giglio show IV exceeds HV on roughly 85% of trading days — the 'normal' side of the variance risk premium, and the far more common case than the inversions vrp-inversion-long trades. Every other strategy in this book is long premium (profits only when price or vol moves in its favor); this one sells rich premium instead, collecting the spread between what options imply and what the stock actually realizes. Both legs are structured so NEITHER ever requires owning the underlying stock: a cash-secured put (collateral is cash, not shares) when the tape is bullish-leaning, or a credit call spread (a further-OTM long call caps the risk instead of owned shares) when it's bearish-leaning. This replaces earnings-iv-crush, whose own thesis admitted it loses on average — this is the actual positive-EV side of selling premium.",
     academicBasis:
-      "Jongadsayakul — 'Return Determinants of Option Strategies'. Covered call (i.e. short vol) returns are highest when IV is elevated. This strategy takes the long side of that same trade — lower expected value but unlimited upside if the move exceeds the implied move. Best used to learn why IV crush happens and how options price uncertainty.",
-    posture: "long_vol",
+      "Dew-Becker & Giglio — 'The Decline of the Variance Risk Premium'. IV > HV (the premium sellers are paid to bear) holds on the large majority of trading days, which is the textbook long-run-positive-EV side of options trading — the mirror image of vrp-inversion-long's rarer IV<HV inversion signal.",
+    posture: "short_vol",
     optionPreference: "both",
-    timeHorizon: "5–7 days — open 1 week before earnings, close the morning after",
-    instruments: "Options — long ATM straddle on weekly expiry right after earnings",
-    entrySignal: "Earnings date confirmed within 5–7 days AND pre-earnings IV ≥ 40%",
+    timeHorizon: "30–45 DTE; exit at 50% of credit captured, −100% stop, or 14 DTE",
+    instruments: "Options — cash-secured put (bullish tape) or credit call spread (bearish tape); never stock",
+    entrySignal: "Current IV ≥ 30-day HV (vol genuinely rich, not just average)",
     allocationPct: 15,
     maxPositions: 3,
     perTradeSizing:
-      "With 15% of account as the options budget, max 3 concurrent earnings plays. Each straddle costs the combined ATM call + put premium × 100 shares. The breakeven requires the stock to move more than the combined premium / stock price in percentage terms.",
+      "Sized by COLLATERAL, not premium — a cash-secured put's collateral is the full strike × 100, and a credit spread's max loss is the strike width × 100, both far larger than the small premium received. Size against the account's actual options buying power (not equity%, which only safely bounds strategies that risk premium paid, not collateral posted), capped at the 15%/3-slot budget. Skip the trade entirely rather than force an undersized contract if even 1 contract's collateral doesn't fit — unlike the long-premium strategies in this book, there's no safe 'round up to 1' tolerance here.",
     buyRules: [
-      "Earnings date confirmed within 5–7 days",
-      "IV ≥ 40% — pre-earnings premium must be elevated for the setup to make sense",
-      "Buy ATM call + ATM put on weekly expiry expiring right after the earnings announcement",
-      "Understand the implied move: straddle cost / stock price = what the options expect",
+      "Confirm current IV ≥ 30-day HV — options are genuinely rich, not just average",
+      "SPY above its 50-day MA (bullish-leaning tape): sell a cash-secured put ~25-delta OTM",
+      "SPY below its 50-day MA (bearish-leaning tape): sell a credit call spread (~25-delta short call + a further-OTM long call as the wing) — the wing is what covers the short call without owning stock",
+      "Both structures expire 30–45 days out, same convention as the rest of this book",
     ],
     sellRules: [
-      "Close the morning after earnings — non-negotiable. IV crush happens overnight",
-      "If the stock gaps far enough to cover the straddle cost, take profit immediately",
-      "If the move is smaller than expected, cut the loss — do not hold to expiry",
+      "Take profit at 50% of the credit captured — the standard practitioner rule for short premium (convention, not literature, unlike this file's other citations)",
+      "Stop loss at −100% of credit received (the position has roughly doubled against us)",
+      "Time stop at 14 DTE — tighter than this book's usual 21, specifically to close before assignment risk: a short put still open into expiration can be assigned, forcing a 100-share purchase at the strike — exactly the stock-leg problem this strategy exists to avoid recreating",
     ],
     riskNote:
-      "On average this trade LOSES — sellers collect IV crush most of the time. The value is educational: learning how IV spike and crush works, and identifying the rare cases where the move exceeds expectations. Size small.",
+      "A cash-secured put's loss is NOT capped the way the credit spread's is — if the stock gaps far below the strike, assignment risk and loss are real and open-ended until the position is closed, which is why the stop loss and 14-DTE time stop both exist independently of each other. Never let this strategy's positions sit unmanaged into expiration week.",
     exampleTickers: [
-      "AAPL", "MSFT", "GOOGL","META", "AMZN",
-      "NFLX", "NVDA", "AMD",  "CRM",  "TSLA",
-      "ORCL", "ADBE", "INTC", "PYPL", "V",
-      "MA",   "JPM",  "GS",   "BAC",  "WMT",
+      "XLF",  "XLE",  "XLU",  "SOFI", "F",
+      "XLP",  "XLI",  "T",    "PFE",  "KO",
+      "BAC",  "WFC",  "SPY",  "QQQ",  "IWM",
+      "AAPL", "MSFT", "AMD",  "INTC", "GOOGL",
     ],
   },
 

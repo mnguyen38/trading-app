@@ -18,6 +18,10 @@ export type Account = {
   portfolio_value: string;
   pattern_day_trader: boolean;
   trading_blocked: boolean;
+  // Separate, smaller pool than buying_power — the actual ceiling for every options order
+  // regardless of margin/equity elsewhere in the account. A cash-secured put's collateral
+  // (strike × 100) or a credit spread's max loss draws from THIS, not equity%.
+  options_buying_power: string;
 };
 
 export type Position = {
@@ -54,6 +58,11 @@ export type Order = {
   submitted_at: string;
   filled_at: string | null;
   asset_class: string;
+  // Populated for order_class "mleg" (e.g. a credit spread) — the top-level `symbol` on a
+  // multi-leg order is empty/blank (confirmed via Alpaca forum reports of this exact
+  // behavior), so any code that needs a multi-leg order's actual option symbols must read
+  // them from here, per leg, instead.
+  legs?: Order[] | null;
 };
 
 export type PlaceOrderInput = {
@@ -80,6 +89,9 @@ export type Clock = {
   next_open: string;
   next_close: string;
 };
+
+// One NYSE trading day. Holidays are simply absent; early-close days are present.
+export type CalendarDay = { date: string; open: string; close: string };
 
 export type Bar = { t: string; o: number; h: number; l: number; c: number; v: number };
 
@@ -108,6 +120,27 @@ export type PlaceOptionOrderInput = {
   time_in_force: "day" | "gtc";
   qty: string;          // number of contracts (each = 100 shares)
   limit_price?: string;
+  client_order_id?: string;
+};
+
+// One leg of a multi-leg ("mleg") options order — e.g. the two legs of a credit call
+// spread. position_intent tells Alpaca's risk engine whether this leg OPENS or CLOSES a
+// position, which is what lets a short leg be accepted as "covered by the other leg in
+// this same order" rather than rejected as a naked short.
+export type OptionLeg = {
+  symbol: string;
+  ratio_qty: string;    // relative size vs the other legs — "1" for a simple 1:1 vertical
+  side: "buy" | "sell";
+  position_intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+};
+
+export type PlaceMultiLegOrderInput = {
+  legs: OptionLeg[];
+  qty: string;
+  type: "market" | "limit";
+  limit_price?: string; // net price for the WHOLE combo (net credit/debit), not per-leg
+  time_in_force: "day" | "gtc";
+  client_order_id?: string;
 };
 
 // Parsed representation of an OCC option symbol
@@ -172,9 +205,19 @@ export class AlpacaClient {
   getAccount() { return this.req<Account>(BASE, "GET", "/account"); }
   getPositions() { return this.req<Position[]>(BASE, "GET", "/positions"); }
   getOrders(status: "open" | "closed" | "all" = "open", limit = 50) {
-    return this.req<Order[]>(BASE, "GET", `/orders?status=${status}&limit=${limit}`);
+    // nested=true rolls a multi-leg order's individual legs under its `legs` field — without
+    // it, an mleg order's leg symbols aren't retrievable at all (its own top-level `symbol`
+    // is blank).
+    return this.req<Order[]>(BASE, "GET", `/orders?status=${status}&limit=${limit}&nested=true`);
   }
   getOrder(id: string) { return this.req<Order>(BASE, "GET", `/orders/${id}`); }
+  // Alpaca's lookup-by-client-order-id endpoint — used to recover the real order (and its
+  // server-assigned id/symbol) after a duplicate client_order_id rejection, so a retried
+  // placement that actually succeeded the first time still gets tagged/tracked instead of
+  // being silently skipped and left invisible to exit management.
+  getOrderByClientId(clientOrderId: string) {
+    return this.req<Order>(BASE, "GET", `/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`);
+  }
   placeOrder(input: PlaceOrderInput) { return this.req<Order>(BASE, "POST", "/orders", input); }
   cancelOrder(id: string) { return this.req<void>(BASE, "DELETE", `/orders/${id}`); }
   cancelAllOrders() { return this.req<unknown[]>(BASE, "DELETE", "/orders"); }
@@ -184,6 +227,9 @@ export class AlpacaClient {
   }
   getPosition(symbol: string) { return this.req<Position>(BASE, "GET", `/positions/${encodeURIComponent(symbol)}`); }
   getClock() { return this.req<Clock>(BASE, "GET", "/clock"); }
+  getCalendar(start: string, end: string) {
+    return this.req<CalendarDay[]>(BASE, "GET", `/calendar?start=${start}&end=${end}`);
+  }
 
   // Options endpoints
   getOptionsContracts(
@@ -225,8 +271,26 @@ export class AlpacaClient {
       time_in_force: input.time_in_force,
       qty: input.qty,
       ...(input.limit_price ? { limit_price: input.limit_price } : {}),
+      ...(input.client_order_id ? { client_order_id: input.client_order_id } : {}),
       asset_class: "us_option",
       order_class: "simple",
+    });
+  }
+
+  // A multi-leg ("mleg") options order — e.g. a credit call spread (sell near strike + buy
+  // a further-OTM strike, same expiry). Alpaca only accepts an mleg order if every leg is
+  // covered WITHIN the same order (confirmed via Alpaca's options-level-3 docs); it fills
+  // or rejects the whole combo atomically — there is no partial-leg state to reconcile the
+  // way there is when a straddle is placed as two separate `simple` orders.
+  placeMultiLegOrder(input: PlaceMultiLegOrderInput) {
+    return this.req<Order>(BASE, "POST", "/orders", {
+      order_class: "mleg",
+      qty: input.qty,
+      type: input.type,
+      time_in_force: input.time_in_force,
+      ...(input.limit_price ? { limit_price: input.limit_price } : {}),
+      ...(input.client_order_id ? { client_order_id: input.client_order_id } : {}),
+      legs: input.legs,
     });
   }
 
@@ -244,7 +308,7 @@ export class AlpacaClient {
       prevDailyBar?: { c: number };
     }>(DATA_BASE, "GET", `/stocks/${encodeURIComponent(symbol)}/snapshot?feed=iex`);
   }
-  getBars(symbol: string, timeframe = "1Day", limit = 260) {
+  async getBars(symbol: string, timeframe = "1Day", limit = 260) {
     // Without a start date Alpaca returns only the current session bar.
     // 1.5× calendar days per trading day covers weekends + holidays.
     const start = new Date();
@@ -253,12 +317,20 @@ export class AlpacaClient {
       timeframe,
       limit: String(limit),
       start: start.toISOString().split("T")[0],
+      // Without this, Alpaca defaults to ascending order, so a `limit` cap returns
+      // the OLDEST `limit` bars in the [start, now) window, not the most recent —
+      // every indicator in this codebase was silently computing off week-old data.
+      // Fetch newest-first (capped at `limit`), then restore chronological order below.
+      sort: "desc",
       feed: "iex",
       adjustment: "split",
     });
-    return this.req<{ bars: Bar[] }>(
+    const res = await this.req<{ bars: Bar[] }>(
       DATA_BASE, "GET", `/stocks/${encodeURIComponent(symbol)}/bars?${params}`,
     );
+    // Every caller (indicators.ts, signals.ts) assumes ascending/chronological order
+    // with the most recent bar last — restore that after the desc fetch above.
+    return { bars: [...res.bars].reverse() };
   }
 }
 

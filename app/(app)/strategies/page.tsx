@@ -4,6 +4,7 @@ import { strategiesForType, cashBufferPct, bufferConfig } from "@/src/lib/strate
 import { StrategyCard } from "@/src/components/strategies/StrategyCard";
 import { EngineLog } from "@/src/components/strategies/EngineLog";
 import { money } from "@/src/lib/format";
+import { PageHeader } from "@/src/components/arena/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,10 @@ export default async function StrategiesPage() {
 
   return (
     <div>
-      <div className="border-b border-neutral-800 px-8 py-6">
-        <h1 className="text-xl font-bold">Strategies</h1>
-        <p className="mt-1 max-w-3xl text-sm text-neutral-500">
-          How each side is implemented: the rules the engine trades, how capital is split, and what
-          it did on each run. Nothing here is manual — the cron-driven engine places every order.
-        </p>
-      </div>
+      <PageHeader eyebrow="Implementation" title="Strategies">
+        How each side is implemented: the rules the engine trades, how capital is split, and what
+        it did on each run. Nothing here is manual — the cron-driven engine places every order.
+      </PageHeader>
 
       <div className="grid lg:grid-cols-2 lg:divide-x lg:divide-neutral-800">
         {competitors.map(c => {
@@ -26,9 +24,9 @@ export default async function StrategiesPage() {
           const buffer = bufferConfig(c.trader.type);
           const totalPct = strategies.reduce((s, st) => s + st.allocationPct, 0) + cashBufferPct(c.trader.type);
           return (
-            <section key={c.trader.id} className="min-w-0 px-8 py-7" style={{ boxShadow: `inset 0 3px 0 ${c.color}` }}>
+            <section key={c.trader.id} className="min-w-0 px-6 py-8 lg:px-14" style={{ boxShadow: `inset 0 3px 0 ${c.color}` }}>
               <div className="mb-6 flex items-center gap-3">
-                <h2 className="text-lg font-bold" style={{ color: c.color }}>{c.trader.name}</h2>
+                <h2 className="font-serif text-3xl font-semibold" style={{ color: c.color }}>{c.trader.name}</h2>
                 <span className="text-xs text-neutral-500">{SIDE_LABEL[c.trader.type]}</span>
                 <span className="ml-auto font-mono text-sm font-semibold tabular-nums">{money(c.equity, 0)}</span>
               </div>
@@ -42,9 +40,9 @@ export default async function StrategiesPage() {
                   {strategies.map(st => (
                     <Bar key={st.slug} label={st.name} pct={st.allocationPct} dollars={c.equity * st.allocationPct / 100} color={c.color} />
                   ))}
-                  <Bar label="Hard cash reserve" pct={buffer.hardCashPct} dollars={c.equity * buffer.hardCashPct / 100} color="#404040" muted />
+                  <Bar label="Hard cash reserve" pct={buffer.hardCashPct} dollars={c.equity * buffer.hardCashPct / 100} color="#c9c2b1" muted />
                   {buffer.investedPct > 0 && (
-                    <Bar label={buffer.investedTickerName} pct={buffer.investedPct} dollars={c.equity * buffer.investedPct / 100} color="#0c4a6e" muted />
+                    <Bar label={buffer.investedTickerName} pct={buffer.investedPct} dollars={c.equity * buffer.investedPct / 100} color="#9db8d6" muted />
                   )}
                 </div>
                 <div className="mt-3 text-[10px] text-neutral-600">

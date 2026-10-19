@@ -1,18 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html, body {
-  background: #0a0a0a;
-  color: #ededed;
+  background: #f5f2ea;
+  color: #1b1a17;
 }
 
 @theme {
-  --color-bg: #0a0a0a;
-  --color-card: #141414;
-  --color-border: #262626;
-  --color-up: #16a34a;
-  --color-down: #dc2626;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
+
+  /* Editorial light theme */
+  --color-paper: #f5f2ea;
+  --color-card: #fbf9f4;
+  --color-ink: #1b1a17;
+  --color-muted: #66625a;
+  --color-line: #dcd6c8;
+  --color-up: #1f7a4d;
+  --color-down: #b42318;
+  --color-micro: #c2410c;
+  --color-macro: #1d5fa8;
+
+  /* The app's older components are written against a dark neutral scale
+     (text-neutral-100 = brightest text, bg-neutral-950 = page). Re-pointing the
+     scale at the paper/ink palette re-skins them with no per-file edits. */
+  --color-neutral-50: #14130f;
+  --color-neutral-100: #1b1a17;
+  --color-neutral-200: #26241f;
+  --color-neutral-300: #3a3833;
+  --color-neutral-400: #4d4a43;
+  --color-neutral-500: #66625a;
+  --color-neutral-600: #6f6a60;
+  --color-neutral-700: #b9b2a2;
+  --color-neutral-800: #dcd6c8;
+  --color-neutral-900: #fbf9f4;
+  --color-neutral-950: #f5f2ea;
+
+  /* Status/accent colours: dark enough for text on paper (>= 4.5:1), and the
+     900/950 tints become pale washes instead of dark ones. */
+  --color-red-300: #b42318;
+  --color-red-400: #b42318;
+  --color-red-500: #b42318;
+  --color-red-600: #b42318;
+  --color-red-900: #f3c9c3;
+  --color-red-950: #f8ddd9;
+  --color-green-400: #1f7a4d;
+  --color-green-500: #1f7a4d;
+  --color-emerald-400: #1f7a4d;
+  --color-emerald-900: #cfe6d8;
+  --color-orange-400: #c2410c;
+  --color-orange-500: #c2410c;
+  --color-orange-900: #f2d3c2;
+  --color-amber-400: #92590a;
+  --color-sky-400: #0f6a99;
+  --color-sky-900: #cfe3ef;
+  --color-blue-400: #1d5fa8;
+  --color-blue-900: #cddcee;
+  --color-violet-400: #6d28d9;
+  --color-purple-400: #6d28d9;
+  --color-purple-900: #ddd0f2;
 }

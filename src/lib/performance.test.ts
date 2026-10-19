@@ -90,9 +90,9 @@ describe("impliedTradesPerYear()", () => {
   });
 
   it("scales trade frequency up to an annual rate", () => {
-    // 2 trades exactly 1 day apart -> ~730 trades/year
+    // 2 trades exactly 1 day apart -> 2 / 1 day * 365 = 730 trades/year
     const rate = impliedTradesPerYear([trip("2024-01-01T00:00:00Z"), trip("2024-01-02T00:00:00Z")]);
-    expect(rate!).toBeCloseTo(365, 0);
+    expect(rate!).toBeCloseTo(730, 0);
   });
 });
 

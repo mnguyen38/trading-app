@@ -39,20 +39,20 @@ export function EquityChart({
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" aria-hidden="true">
       {/* grid */}
-      <line x1={PL} y1={PT}      x2={W - PR} y2={PT}      stroke="#262626" strokeWidth={1} />
-      <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#262626" strokeWidth={1} />
+      <line x1={PL} y1={PT}      x2={W - PR} y2={PT}      stroke="#dcd6c8" strokeWidth={1} />
+      <line x1={PL} y1={PT + cH} x2={W - PR} y2={PT + cH} stroke="#dcd6c8" strokeWidth={1} />
 
-      <line x1={PL} y1={PT + cH / 2} x2={W - PR} y2={PT + cH / 2} stroke="#1c1c1c" strokeWidth={1} />
+      <line x1={PL} y1={PT + cH / 2} x2={W - PR} y2={PT + cH / 2} stroke="#e6e0d2" strokeWidth={1} />
 
       {/* y labels */}
-      <text x={PL - 6} y={PT + cH / 2 + 3} textAnchor="end" fontSize={10} fill="#525252">{moneyK((minE + maxE) / 2)}</text>
-      <text x={PL - 6} y={PT + 4}      textAnchor="end" fontSize={10} fill="#525252">{moneyK(maxE)}</text>
-      <text x={PL - 6} y={PT + cH + 1} textAnchor="end" fontSize={10} fill="#525252">{moneyK(minE)}</text>
+      <text x={PL - 6} y={PT + cH / 2 + 3} textAnchor="end" fontSize={10} fill="#6c685f">{moneyK((minE + maxE) / 2)}</text>
+      <text x={PL - 6} y={PT + 4}      textAnchor="end" fontSize={10} fill="#6c685f">{moneyK(maxE)}</text>
+      <text x={PL - 6} y={PT + cH + 1} textAnchor="end" fontSize={10} fill="#6c685f">{moneyK(minE)}</text>
 
       {/* x labels */}
       {allDates.length > 1 && <>
-        <text x={PL}        y={H - 5} textAnchor="start" fontSize={10} fill="#525252">{mmdd(allDates[0])}</text>
-        <text x={W - PR}    y={H - 5} textAnchor="end"   fontSize={10} fill="#525252">{mmdd(allDates[allDates.length - 1])}</text>
+        <text x={PL}        y={H - 5} textAnchor="start" fontSize={10} fill="#6c685f">{mmdd(allDates[0])}</text>
+        <text x={W - PR}    y={H - 5} textAnchor="end"   fontSize={10} fill="#6c685f">{mmdd(allDates[allDates.length - 1])}</text>
       </>}
 
       {/* series */}

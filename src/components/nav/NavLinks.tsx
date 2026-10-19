@@ -12,7 +12,7 @@ const LINKS = [
 export function NavLinks() {
   const pathname = usePathname();
   return (
-    <nav className="flex h-full items-stretch gap-1">
+    <nav className="flex items-center gap-8">
       {LINKS.map(l => {
         const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
         return (
@@ -20,10 +20,11 @@ export function NavLinks() {
             key={l.href}
             href={l.href}
             prefetch
-            className={`flex items-center border-b-2 px-4 text-sm font-medium transition ${
+            aria-current={active ? "page" : undefined}
+            className={`border-b-2 pb-1 text-[15px] transition ${
               active
-                ? "border-neutral-100 text-neutral-100"
-                : "border-transparent text-neutral-500 hover:text-neutral-200"
+                ? "border-ink font-semibold text-ink"
+                : "border-transparent font-medium text-muted hover:text-ink"
             }`}
           >
             {l.label}

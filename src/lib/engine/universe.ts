@@ -35,7 +35,7 @@ export const MACRO_EQUITY_UNIVERSE = [
   "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "V", "MA",
   "JNJ", "UNH", "COST", "HD", "MCD", "WMT", "NKE", "SBUX",
   "JPM", "BAC", "GS", "XOM", "CVX", "LLY", "ABBV", "AMGN",
-  "BRK-B", "PG", "KO", "PEP", "TMO", "ABT",
+  "BRK.B", "PG", "KO", "PEP", "TMO", "ABT",
   // Swing-trade candidates (higher beta, clear trend patterns)
   "TSLA", "AMD", "NVDA", "NFLX", "CRM", "ADBE", "ORCL",
   "BA", "CAT", "GE", "HON", "RTX",

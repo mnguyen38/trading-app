@@ -137,9 +137,17 @@ function nearestPricedPair(
 }
 
 /**
- * Estimates IV using the Brenner-Subrahmanyam ATM approximation:
- *   IV ≈ sqrt(2π / T) × (C + P) / S
- * where T is time to expiry in years, C and P are the ATM call and put prices.
+ * Estimates IV using the Brenner-Subrahmanyam ATM approximation.
+ *
+ * The original B-S approximation is for a SINGLE ATM call: C ≈ 0.4·S·σ·√T, i.e.
+ *   σ ≈ sqrt(2π/T) × C/S.
+ * By put-call parity an ATM straddle ≈ 2C (r≈0), so substituting C = straddle/2:
+ *   σ ≈ sqrt(2π/T) × (straddle/2)/S = sqrt(π/(2T)) × straddle/S.
+ * The code previously used sqrt(2π/T) directly against the straddle price, which is
+ * the single-call formula applied to a straddle — off by a factor of 2 (one call's
+ * worth of coefficient, straddle-sized input). Verified against a Black-Scholes
+ * straddle priced at a known vol: the old formula read back ~2.00x the true sigma,
+ * this one reads back 1.00x (see iv.test.ts).
  *
  * Uses the expiry closest to 38 DTE (Goyal & Saretto's optimal 30-45 DTE window).
  * Returns null if Alpaca has no priced option contracts for this underlying.
@@ -171,8 +179,8 @@ export async function estimateIV(
   const dte = daysUntil(expiry);
   const T = dte / 365;
 
-  // Brenner-Subrahmanyam: IV = sqrt(2π/T) × straddle / S
-  const iv = Math.sqrt((2 * Math.PI) / T) * (straddle / stockPrice) * 100;
+  // Brenner-Subrahmanyam (straddle form): IV = sqrt(π/(2T)) × straddle / S
+  const iv = Math.sqrt(Math.PI / (2 * T)) * (straddle / stockPrice) * 100;
 
   return { iv, straddle, dte, atmStrike: pair.strike };
 }
@@ -233,6 +241,61 @@ export async function selectStrangleStrikes(
     callStrike: parseFloat(nearestCall.strike_price),
     putStrike:  parseFloat(nearestPut.strike_price),
     expiry,
+  };
+}
+
+export type ShortPremiumStructure = {
+  expiry: string;
+  // Cash-secured put: sell this strike directly. Collateral = strike × 100 in cash —
+  // never requires owning the underlying stock (Alpaca options level 1).
+  shortPutSymbol: string;
+  shortPutStrike: number;
+  // Credit call spread: sell shortCallSymbol, buy longCallSymbol (the further-OTM "wing").
+  // The wing caps the combo's max loss at the strike width, which is what lets the short
+  // call be sold WITHOUT owning the stock (a bare short call would need level 1's covered-
+  // call construction — buy 100 shares per contract — or an uncovered-short approval
+  // Alpaca doesn't offer at all; the wing is what makes this level 3's "covered" instead).
+  shortCallSymbol: string;
+  shortCallStrike: number;
+  longCallSymbol: string;
+  longCallStrike: number;
+};
+
+/**
+ * Builds the two covered short-premium structures for the VRP-short sleeve: a cash-secured
+ * put, and a credit call spread. Reuses selectStrangleStrikes' ~25-delta short strikes, then
+ * finds the nearest listed strike ABOVE the short call as the spread's protective wing.
+ * Returns null if either side can't be built (no strangle strikes, or no listed strike
+ * further OTM than the short call for the wing).
+ */
+export async function selectShortPremiumStructure(
+  alpaca: AlpacaClient,
+  underlying: string,
+  stockPrice: number,
+  ivPct: number,
+  targetDte = 38,
+): Promise<ShortPremiumStructure | null> {
+  const strangle = await selectStrangleStrikes(alpaca, underlying, stockPrice, ivPct, targetDte);
+  if (!strangle) return null;
+
+  const { contracts } = await fetchContracts(alpaca, underlying, 28, 50, stockPrice);
+  const wingCandidates = contracts.filter(c =>
+    c.expiration_date === strangle.expiry && c.type === "call" && parseFloat(c.strike_price) > strangle.callStrike,
+  );
+  if (wingCandidates.length === 0) return null;
+
+  const wing = wingCandidates.reduce((best, c) =>
+    parseFloat(c.strike_price) < parseFloat(best.strike_price) ? c : best,
+  );
+
+  return {
+    expiry: strangle.expiry,
+    shortPutSymbol: strangle.putSymbol,
+    shortPutStrike: strangle.putStrike,
+    shortCallSymbol: strangle.callSymbol,
+    shortCallStrike: strangle.callStrike,
+    longCallSymbol: wing.symbol,
+    longCallStrike: parseFloat(wing.strike_price),
   };
 }
 

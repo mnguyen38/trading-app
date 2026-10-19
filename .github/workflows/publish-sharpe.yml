@@ -1,0 +1,90 @@
+name: Publish Sharpe and returns to portfolio site
+
+# Fetches the higher Sharpe ratio and the returns from the (private) /api/sharpe and /api/returns
+# endpoints and commits them to the portfolio repo as src/data/sharpe.json and
+# src/data/returns.json, which triggers a Vercel rebuild of that site.
+#
+# Required secrets in THIS repo:
+#   APP_URL, CRON_SECRET        — already used by the engine workflows
+#   PORTFOLIO_REPO_TOKEN        — fine-grained PAT scoped ONLY to mnguyen38/Personal-Portfolio,
+#                                 permission "Contents: Read and write"
+
+on:
+  schedule:
+    # 22:30 UTC weekdays — after the 22:05 UTC daily equity snapshot
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: publish-sharpe
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch from the app
+        run: |
+          fetch() {  # $1 = endpoint name
+            HTTP_CODE=$(curl -s -o "$1.json" -w "%{http_code}" --retry 3 --retry-delay 5 \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "${{ secrets.APP_URL }}/api/$1")
+            echo "/api/$1 -> HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::error::/api/$1 returned HTTP $HTTP_CODE"
+              exit 1
+            fi
+          }
+          fetch sharpe
+          fetch returns
+
+          # Only publish real numbers — keep the last good file if there isn't enough history yet.
+          mkdir -p publish
+          jq -e '.sharpe != null and .asOf != null' sharpe.json > /dev/null \
+            && cp sharpe.json publish/sharpe.json \
+            || echo "No Sharpe available yet — leaving sharpe.json untouched."
+          jq -e '.totalReturnPct != null and .asOf != null' returns.json > /dev/null \
+            && cp returns.json publish/returns.json \
+            || echo "No returns available yet — leaving returns.json untouched."
+
+          if [ -z "$(ls -A publish)" ]; then
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Check out portfolio repo
+        if: env.SKIP != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: mnguyen38/Personal-Portfolio
+          ref: master
+          token: ${{ secrets.PORTFOLIO_REPO_TOKEN }}
+          path: site
+
+      - name: Commit if changed
+        if: env.SKIP != 'true'
+        run: |
+          mkdir -p site/src/data
+          CHANGED=""
+          for f in publish/*.json; do
+            name=$(basename "$f")
+            target="site/src/data/$name"
+            # Compare ignoring computedAt so same-day reruns don't create empty-value commits.
+            if [ -f "$target" ] && [ "$(jq -S 'del(.computedAt)' "$target")" = "$(jq -S 'del(.computedAt)' "$f")" ]; then
+              echo "$name unchanged."
+              continue
+            fi
+            jq -S . "$f" > "$target"
+            CHANGED="$CHANGED src/data/$name"
+          done
+
+          if [ -z "$CHANGED" ]; then
+            echo "Nothing changed — no commit."
+            exit 0
+          fi
+
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $CHANGED
+          git commit -m "chore(data): update sharpe ratio and returns"
+          git push origin HEAD:master

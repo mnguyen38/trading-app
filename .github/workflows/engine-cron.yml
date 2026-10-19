@@ -14,23 +14,6 @@ on:
         default: ''
 
 jobs:
-  micro-entry:
-    name: Micro — entry scan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    steps:
-      - name: Trigger
-        run: |
-          echo "Calling micro entry at $(date -u)"
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
-            "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=micro" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "HTTP $HTTP_CODE"
-          echo "$BODY" | jq '.' || echo "$BODY"
-          [ "$HTTP_CODE" -lt 400 ] || exit 1
-
   micro-exit:
     name: Micro — exit scan
     runs-on: ubuntu-latest
@@ -48,28 +31,31 @@ jobs:
           echo "$BODY" | jq '.' || echo "$BODY"
           [ "$HTTP_CODE" -lt 400 ] || exit 1
 
-  macro-entry:
-    name: Macro — entry scan (every 30 min)
+  micro-entry:
+    name: Micro — entry scan
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    needs: micro-exit
+    # Entry and exit both read/write the same positions, strategy_trades and engine_state
+    # rows for this trader — running them in parallel (as separate jobs with no `needs`
+    # previously did) means each can act on a snapshot the other is mid-way through
+    # changing. Exit runs first on purpose: it frees up maxPositions slots and cash
+    # (checkLegacyEquityExits / selectLegacyEquitySlotExits / selectLegacyEquityExitsForCapital
+    # in runner.ts) that entry can then actually use in the SAME 5-minute cycle instead of
+    # waiting for the next one. `always()` so a failed/errored exit call doesn't skip entry
+    # entirely — missing one cycle's exit check shouldn't also cost the entry opportunity.
+    if: always() && github.event_name == 'schedule'
     steps:
       - name: Trigger
         run: |
-          MINUTE=$(date -u +%M)
-          # Fire at :00–:04 and :30–:34 past each hour
-          if [ "$MINUTE" -lt "5" ] || ([ "$MINUTE" -ge "30" ] && [ "$MINUTE" -lt "35" ]); then
-            echo "Macro entry scan at $(date -u)"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
-              "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=macro" \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
-            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-            BODY=$(echo "$RESPONSE" | head -n -1)
-            echo "HTTP $HTTP_CODE"
-            echo "$BODY" | jq '.' || echo "$BODY"
-            [ "$HTTP_CODE" -lt 400 ] || exit 1
-          else
-            echo "Not a 30-min window (:${MINUTE}), skipping"
-          fi
+          echo "Calling micro entry at $(date -u)"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
+            "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=micro" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          [ "$HTTP_CODE" -lt 400 ] || exit 1
 
   macro-exit:
     name: Macro — exit scan (every 30 min)
@@ -92,6 +78,31 @@ jobs:
             [ "$HTTP_CODE" -lt 400 ] || exit 1
           else
             echo "Outside macro exit window (now :${MINUTE}), skipping"
+          fi
+
+  macro-entry:
+    name: Macro — entry scan (every 30 min)
+    runs-on: ubuntu-latest
+    needs: macro-exit
+    # Same ordering rationale as micro-entry/micro-exit above.
+    if: always() && github.event_name == 'schedule'
+    steps:
+      - name: Trigger
+        run: |
+          MINUTE=$(date -u +%M)
+          # Fire at :00–:04 and :30–:34 past each hour
+          if [ "$MINUTE" -lt "5" ] || ([ "$MINUTE" -ge "30" ] && [ "$MINUTE" -lt "35" ]); then
+            echo "Macro entry scan at $(date -u)"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X GET \
+              "${{ secrets.APP_URL }}/api/engine/run?phase=entry&trader_type=macro" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "HTTP $HTTP_CODE"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            [ "$HTTP_CODE" -lt 400 ] || exit 1
+          else
+            echo "Not a 30-min window (:${MINUTE}), skipping"
           fi
 
   manual:

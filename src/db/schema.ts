@@ -60,6 +60,11 @@ export const strategyTrades = pgTable("strategy_trades", {
   strategySlug: text("strategy_slug").notNull(),
   orderId:      text("order_id").notNull(),
   symbol:       text("symbol").notNull(),
+  // The exact traded symbol (full OCC option symbol, or the bare ticker for a stock leg) —
+  // `symbol` above is only the underlying, which is ambiguous once more than one strategy
+  // has ever traded the same underlying. Nullable because rows written before this column
+  // existed have no way to recover it retroactively.
+  exactSymbol:  text("exact_symbol"),
   side:         text("side").notNull(),
   createdAt:    timestamp("created_at").defaultNow().notNull(),
 });

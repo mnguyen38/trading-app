@@ -31,13 +31,14 @@ function relativeTime(d: Date) {
 function strategyLabel(slug: string) {
   const map: Record<string, string> = {
     "vol-spread-long":    "Vol-Spread Long",
-    "vrp-premium-seller": "VRP Premium Seller",
-    "earnings-iv-crush":  "Earnings IV Crush",
+    "vrp-premium-seller": "RSI Reversal",
+    "vrp-premium-short":  "VRP Premium Short",
     "vrp-inversion-long": "VRP Inversion Long",
     "quality-hold":       "Quality Hold",
     "sector-rotation":    "Sector Rotation",
     "economic-cycle":     "Economic Cycle",
     "swing-trade":        "Swing Trade",
+    "legacy-equity":      "Legacy Stock (unwind)",
   };
   return map[slug] ?? slug;
 }

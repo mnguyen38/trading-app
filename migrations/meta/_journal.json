@@ -43,6 +43,13 @@
       "when": 1790289384000,
       "tag": "0005_drop_lesson_concept_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792137600000,
+      "tag": "0006_add_exact_symbol",
+      "breakpoints": true
     }
   ]
 }

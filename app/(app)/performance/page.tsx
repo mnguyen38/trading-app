@@ -4,6 +4,7 @@ import type { Trader } from "@/src/lib/traders";
 import { MIN_TRADES_FOR_STATS } from "@/src/lib/performance";
 import { EquityChart } from "@/src/components/trading/EquityChart";
 import { money, pct, signed } from "@/src/lib/format";
+import { PageHeader } from "@/src/components/arena/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -25,18 +26,15 @@ export default async function PerformancePage() {
   const competitors = await loadCompetitors();
   return (
     <div>
-      <div className="border-b border-neutral-800 px-8 py-6">
-        <h1 className="text-xl font-bold">Performance</h1>
-        <p className="mt-1 max-w-3xl text-sm text-neutral-500">
-          Sharpe and Sortino measure return per unit of risk (Sortino only penalises downside);
-          max drawdown is the worst peak-to-trough fall. Whole-account numbers come from daily
-          equity snapshots; per-strategy numbers are inferred from Alpaca fills.
-        </p>
-      </div>
+      <PageHeader eyebrow="Risk-adjusted returns" title="Performance">
+        Sharpe and Sortino measure return per unit of risk (Sortino only penalises downside);
+        max drawdown is the worst peak-to-trough fall. Whole-account numbers come from daily
+        equity snapshots; per-strategy numbers are inferred from Alpaca fills.
+      </PageHeader>
 
       {/* Tale of the tape */}
       {competitors.length === 2 && (
-        <section className="border-b border-neutral-800 px-8 py-6">
+        <section className="border-b border-neutral-800 bg-card px-6 py-8 lg:px-14">
           <div className="mx-auto max-w-3xl">
             <div className="mb-2 grid grid-cols-[1fr_1fr_1fr] gap-4 text-center text-xs font-bold uppercase tracking-[0.15em]">
               <span style={{ color: competitors[0].color }}>{competitors[0].trader.name}</span>
@@ -53,7 +51,7 @@ export default async function PerformancePage() {
                     {[a, b].map((v, i) => (
                       <span
                         key={i}
-                        className={`font-mono text-xl font-semibold tabular-nums ${i === 0 ? "" : "order-3"} ${
+                        className={`font-serif text-3xl font-medium tabular-nums ${i === 0 ? "" : "order-3"} ${
                           winner === i ? "" : "text-neutral-500"
                         }`}
                         style={winner === i ? { color: competitors[i].color } : undefined}
@@ -72,9 +70,9 @@ export default async function PerformancePage() {
 
       <div className="grid lg:grid-cols-2 lg:divide-x lg:divide-neutral-800">
         {competitors.map(c => (
-          <section key={c.trader.id} className="min-w-0 px-8 py-7" style={{ boxShadow: `inset 0 3px 0 ${c.color}` }}>
+          <section key={c.trader.id} className="min-w-0 px-6 py-8 lg:px-14" style={{ boxShadow: `inset 0 3px 0 ${c.color}` }}>
             <div className="mb-5 flex items-center gap-3">
-              <h2 className="text-lg font-bold" style={{ color: c.color }}>{c.trader.name}</h2>
+              <h2 className="font-serif text-3xl font-semibold" style={{ color: c.color }}>{c.trader.name}</h2>
               <span className="text-xs text-neutral-500">{SIDE_LABEL[c.trader.type]}</span>
             </div>
 

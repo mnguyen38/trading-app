@@ -16,8 +16,8 @@ import { alpacaForTrader } from "../alpaca";
 import type { SignalContext } from "./signals";
 import {
   signalVolSpreadLong,
-  signalVrpPremiumSeller,
-  signalEarningsIVCrush,
+  signalRsiReversal,
+  signalVrpPremiumShort,
   signalVrpInversionLong,
   signalSectorRotation,
   signalQualityHold,
@@ -50,14 +50,14 @@ beforeAll(async () => {
   const [microAccount, microPositions, microTags] = await Promise.all([
     microAlpaca.getAccount(),
     microAlpaca.getPositions(),
-    db.select({ strategySlug: strategyTrades.strategySlug, symbol: strategyTrades.symbol })
+    db.select({ strategySlug: strategyTrades.strategySlug, symbol: strategyTrades.symbol, exactSymbol: strategyTrades.exactSymbol })
       .from(strategyTrades).where(eq(strategyTrades.traderId, micro.id)),
   ]);
 
   const [macroAccount, macroPositions, macroTags] = await Promise.all([
     macroAlpaca.getAccount(),
     macroAlpaca.getPositions(),
-    db.select({ strategySlug: strategyTrades.strategySlug, symbol: strategyTrades.symbol })
+    db.select({ strategySlug: strategyTrades.strategySlug, symbol: strategyTrades.symbol, exactSymbol: strategyTrades.exactSymbol })
       .from(strategyTrades).where(eq(strategyTrades.traderId, macro.id)),
   ]);
 
@@ -65,8 +65,10 @@ beforeAll(async () => {
     alpaca: microAlpaca,
     equity: parseFloat(microAccount.equity),
     perPositionBudget: parseFloat(microAccount.equity) * 0.10,
+    optionsBuyingPower: parseFloat(microAccount.options_buying_power),
     positions: microPositions,
     tags: microTags,
+    pendingOrderUnderlyings: new Set(),
     stateMap: new Map(),
     microScanList: null,   // use fallback universe — same as when scanner hasn't run
     macroEquityList: null,
@@ -76,8 +78,10 @@ beforeAll(async () => {
     alpaca: macroAlpaca,
     equity: parseFloat(macroAccount.equity),
     perPositionBudget: parseFloat(macroAccount.equity) * 0.10,
+    optionsBuyingPower: parseFloat(macroAccount.options_buying_power),
     positions: macroPositions,
     tags: macroTags,
+    pendingOrderUnderlyings: new Set(),
     stateMap: new Map(),
     microScanList: null,
     macroEquityList: null,
@@ -93,8 +97,8 @@ function skip() { return !ctx; }
 
 const microSignals = [
   ["vol-spread-long",    () => signalVolSpreadLong(microCtx)],
-  ["vrp-premium-seller", () => signalVrpPremiumSeller(microCtx)],
-  ["earnings-iv-crush",  () => signalEarningsIVCrush(microCtx)],
+  ["vrp-premium-seller", () => signalRsiReversal(microCtx)],
+  ["vrp-premium-short",  () => signalVrpPremiumShort(microCtx)],
   ["vrp-inversion-long", () => signalVrpInversionLong(microCtx)],
 ] as const;
 
